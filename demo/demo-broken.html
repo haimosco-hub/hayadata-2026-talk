@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Furniture &amp; Office Performance — before</title>
+<!--
+  hayaData 2026 talk — Beat 1 mock ("the broken flow, shown").
+  Rebuilt 2026-09-22 (2nd pass): real row-level data instead of hand-authored arrays, plus
+  functional Category and Product filters. The dataset (furniture_office_data.xlsx, loaded
+  here via data.js — same rows, generated together by generate_data.py) is one row per
+  Month x Region x Product, Jan-Sep 2026, 4 regions x 5 categories x 3-6 products each.
+  Every product carries a baseline unit price/cost; every region applies its own standard
+  discount off list price (Central 3%, East 10%, South 7%, West 5%). Every region/month also
+  carries a small independent margin wobble, so the trend line has natural noise. All
+  chart/KPI math below (buildRegion/buildAll, re-run on every filter change) aggregates rows
+  at runtime — nothing here is a separately-authored number.
+    - Central is deliberately the smallest region by total sales — the anomaly reads as a
+      margin story, not a scale story.
+    - The anomaly: Central's profit RATIO (profit / sales) drops sharply in September only —
+      every other region, and every other month for Central, sits in its normal noisy band.
+    - The cause baked into the data: two low-margin Central products (Task Chair Basic,
+      Storage Cart) carry most of Central's September revenue that month, while the rest of
+      the catalog is trimmed to compensate — so September TOTAL Central sales still look like
+      a regular month; only the margin moved. Nothing on this page surfaces that mix shift —
+      that's the point of the "before" beat. (Filtering Product to one of those two, Region
+      to Central, DOES show it — that gap between "the data has the answer" and "the page
+      won't hand it to you without already knowing what to filter for" is the beat.)
+    - The chart pair is Sales (bars) + Profit RATIO (line), not raw profit dollars — ratio
+      is what is comparable across regions of different size, and it's what actually breaks.
+    - The side card is Sales BY REGION (not profit by region) — proving sales are comparable
+      in scale/shape across regions, so the anomaly can only be about margin, not volume.
+  Figures are ILLUSTRATIVE — verify against a real dataset before rehearsal. Same visual system
+  as demo-fixed.html; that file still needs the matching rebuild (kept in scope for later).
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="data.js"></script>
+<link rel="stylesheet" href="dashboard-theme.css">
+<style>
+  /* Functional dropdowns: Region, Category, Product — Period stays decorative */
+  .dd-wrap { position: relative; display: inline-block; }
+  .dd-btn { cursor: pointer; user-select: none; }
+  .dd-panel {
+    position: absolute; top: calc(100% + 6px); left: 0; min-width: 190px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px; display: none; flex-direction: column; gap: 2px; z-index: 20;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  .dd-panel.open { display: flex; }
+  .dd-item {
+    padding: 8px 10px; border-radius: 6px; font-size: 14px; color: var(--text-secondary);
+    cursor: pointer; display: flex; align-items: center; justify-content: space-between;
+  }
+  .dd-item:hover { background: var(--border-subtle); color: var(--text-primary); }
+  .dd-item.selected { background: var(--accent-muted); color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header class="report-header">
+  <p>Furniture &amp; Office Performance</p>
+  <span class="report-badge badge-broken">Before — the question leaves the page</span>
+</header>
+
+<div class="filter-bar">
+  <div class="dd-wrap">
+    <div class="dd-btn" id="region-btn">
+      <span id="region-label">Region: All</span>
+      <svg class="dd-chevron" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5"/></svg>
+    </div>
+    <div class="dd-panel" id="region-panel">
+      <div class="dd-item" data-region="ALL">All regions</div>
+      <div class="dd-item" data-region="CENTRAL">Central</div>
+      <div class="dd-item" data-region="EAST">East</div>
+      <div class="dd-item" data-region="SOUTH">South</div>
+      <div class="dd-item" data-region="WEST">West</div>
+    </div>
+  </div>
+  <div class="dd-wrap">
+    <div class="dd-btn" id="category-btn">
+      <span id="category-label">Category: All</span>
+      <svg class="dd-chevron" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5"/></svg>
+    </div>
+    <div class="dd-panel" id="category-panel"></div>
+  </div>
+  <div class="dd-wrap">
+    <div class="dd-btn" id="product-btn">
+      <span id="product-label">Product: All</span>
+      <svg class="dd-chevron" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5"/></svg>
+    </div>
+    <div class="dd-panel" id="product-panel"></div>
+  </div>
+  <div class="dd-btn has-value">Period: Jan–Sep 2026 <svg class="dd-chevron" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5"/></svg></div>
+</div>
+
+<main class="report-body">
+
+  <div class="kpi-row">
+    <div class="metric-card">
+      <div class="metric-label">Sales</div>
+      <div class="metric-value" id="kpi-sales">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Profit</div>
+      <div class="metric-value" id="kpi-profit">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Profit ratio</div>
+      <div class="metric-value" id="kpi-ratio">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Orders</div>
+      <div class="metric-value" id="kpi-orders">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Avg. discount</div>
+      <div class="metric-value" id="kpi-discount">—</div>
+    </div>
+  </div>
+
+  <div class="card span-8">
+    <div class="card-header"><span class="card-title" id="trend-title">Sales &amp; profit ratio by month — All regions, Jan–Sep 2026</span></div>
+    <div class="chart-box"><canvas id="chart-trend"></canvas></div>
+  </div>
+
+  <div class="card span-4">
+    <div class="card-header"><span class="card-title">Sales by region — YTD</span></div>
+    <div class="chart-box"><canvas id="chart-region"></canvas></div>
+  </div>
+
+</main>
+
+<script>
+// ─── ONE dataset — RAW_ROWS (loaded from data.js, generated from furniture_office_data.xlsx
+// by generate_data.py) is one row per Month x Region x Product. Everything below is a
+// runtime aggregation of those rows — no chart/KPI number is separately authored. ─────────
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep'];
+const REGION_KEYS = ['CENTRAL','EAST','SOUTH','WEST'];
+const REGION_NAME_TO_KEY = { Central: 'CENTRAL', East: 'EAST', South: 'SOUTH', West: 'WEST' };
+const REGION_LABEL = { ALL: 'All', CENTRAL: 'Central', EAST: 'East', SOUTH: 'South', WEST: 'West' };
+
+// Category/Product option lists are derived from the rows themselves — never hand-typed —
+// so they stay in sync with whatever generate_data.py produces.
+const CATEGORIES = [...new Set(RAW_ROWS.map(r => r.Category))].sort();
+const PRODUCTS_BY_CATEGORY = {};
+CATEGORIES.forEach(c => {
+  PRODUCTS_BY_CATEGORY[c] = [...new Set(RAW_ROWS.filter(r => r.Category === c).map(r => r.Product))].sort();
+});
+const ALL_PRODUCTS = [...new Set(RAW_ROWS.map(r => r.Product))].sort();
+
+const fmtK = v => '$' + (v/1000).toFixed(1) + 'K';
+const fmtUsd = v => '$' + Math.round(v).toLocaleString('en-US');
+const fmtPct = v => (v*100).toFixed(1) + '%';
+
+let selectedRegion = 'ALL';
+let selectedCategory = 'ALL';
+let selectedProduct = 'ALL';
+
+// Rows matching the Category/Product filters (Region is applied per-region below, since
+// the region chart needs every region's total even while one region is selected for KPIs).
+function categoryProductRows() {
+  return RAW_ROWS.filter(r =>
+    (selectedCategory === 'ALL' || r.Category === selectedCategory) &&
+    (selectedProduct  === 'ALL' || r.Product  === selectedProduct));
+}
+
+function buildRegion(key, rows) {
+  const salesMonthly    = MONTHS.map(() => 0);
+  const profitMonthly   = MONTHS.map(() => 0);
+  const discountMonthly = MONTHS.map(() => 0);
+  let orders = 0;
+
+  rows.forEach(r => {
+    if (REGION_NAME_TO_KEY[r.Region] !== key) return;
+    const mi = MONTHS.indexOf(r.Month);
+    salesMonthly[mi]    += r.Sales;
+    profitMonthly[mi]   += r.Profit;
+    discountMonthly[mi] += r['Discount Amount'];
+    orders += r.Orders;
+  });
+
+  const ratioMonthly = salesMonthly.map((s,i) => s ? profitMonthly[i] / s : 0);
+  const sales  = salesMonthly.reduce((a,b) => a+b, 0);
+  const profit = profitMonthly.reduce((a,b) => a+b, 0);
+  const discountAmt = discountMonthly.reduce((a,b) => a+b, 0);
+  return { key, salesMonthly, ratioMonthly, profitMonthly, sales, profit,
+           ratio: sales ? profit / sales : 0,
+           orders, discount: (sales + discountAmt) ? (discountAmt / (sales + discountAmt)) * 100 : 0 };
+}
+
+let REGION_DATA = {};
+
+// Recomputes every region's aggregates (plus "All regions") from the current
+// Category/Product filters. Region itself is not applied here — every region stays
+// visible so the region chart and the region dropdown always reflect the full set.
+function rebuildRegionData() {
+  const rows = categoryProductRows();
+  REGION_DATA = {};
+  REGION_KEYS.forEach(k => REGION_DATA[k] = buildRegion(k, rows));
+
+  // "All regions" is not authored — it is the sum of the four regions, every month.
+  const salesMonthly  = MONTHS.map((_,i) => REGION_KEYS.reduce((sum,k) => sum + REGION_DATA[k].salesMonthly[i], 0));
+  const profitMonthly = MONTHS.map((_,i) => REGION_KEYS.reduce((sum,k) => sum + REGION_DATA[k].profitMonthly[i], 0));
+  const ratioMonthly  = salesMonthly.map((s,i) => s ? profitMonthly[i] / s : 0);
+  const sales  = salesMonthly.reduce((a,b) => a+b, 0);
+  const profit = profitMonthly.reduce((a,b) => a+b, 0);
+  const orders = REGION_KEYS.reduce((sum,k) => sum + REGION_DATA[k].orders, 0);
+  const discount = sales ? REGION_KEYS.reduce((sum,k) => sum + REGION_DATA[k].discount * REGION_DATA[k].sales, 0) / sales : 0;
+  REGION_DATA.ALL = { key: 'ALL', salesMonthly, ratioMonthly, profitMonthly, sales, profit,
+                       ratio: sales ? profit / sales : 0, orders, discount };
+}
+
+rebuildRegionData();
+
+// ─── Charts ───────────────────────────────────────────────────────────────────
+const trendChart = new Chart(document.getElementById('chart-trend'), {
+  data: {
+    labels: MONTHS,
+    datasets: [
+      { type: 'bar', label: 'Sales', yAxisID: 'y', data: [], backgroundColor: 'rgba(91,141,248,0.55)', borderRadius: 3, order: 2 },
+      { type: 'line', label: 'Profit ratio', yAxisID: 'y1', data: [], borderColor: '#e5ff00', backgroundColor: '#e5ff00', pointRadius: 3, tension: 0.3, order: 1 },
+    ],
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { labels: { color: '#bababa', font: { family: 'Inter', size: 11 } } },
+      tooltip: { callbacks: { label: (ctx) => ctx.dataset.yAxisID === 'y1'
+        ? ' Profit ratio: ' + (ctx.parsed.y*100).toFixed(1) + '%'
+        : ' Sales: $' + ctx.parsed.y.toLocaleString('en-US') } },
+    },
+    scales: {
+      x:  { ticks: { color: '#8e8e8e', font: { family: 'Inter', size: 11 } }, grid: { display: false } },
+      y:  { position: 'left',  ticks: { color: '#8e8e8e', font: { family: 'Inter', size: 11 }, callback: v => '$'+(v/1000)+'K' }, grid: { color: '#282828' } },
+      y1: { position: 'right', min: 0, ticks: { color: '#8e8e8e', font: { family: 'Inter', size: 11 }, callback: v => (v*100).toFixed(0)+'%' }, grid: { display: false } },
+    },
+  },
+});
+
+const regionChart = new Chart(document.getElementById('chart-region'), {
+  type: 'bar',
+  data: {
+    labels: REGION_KEYS.map(k => REGION_LABEL[k]),
+    datasets: [{
+      data: REGION_KEYS.map(k => REGION_DATA[k].sales),
+      backgroundColor: REGION_KEYS.map(() => 'rgba(91,141,248,0.55)'),
+      borderRadius: 3,
+    }],
+  },
+  options: {
+    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: (ctx) => ' $' + ctx.parsed.x.toLocaleString('en-US') } },
+    },
+    scales: {
+      x: { ticks: { color: '#8e8e8e', font: { family: 'Inter', size: 11 }, callback: v => '$'+(v/1000)+'K' }, grid: { color: '#282828' } },
+      y: { ticks: { color: '#bababa', font: { family: 'Inter', size: 12 } }, grid: { display: false } },
+    },
+  },
+});
+
+function updateRegionChartHighlight(regionKey) {
+  regionChart.data.datasets[0].backgroundColor = REGION_KEYS.map(k =>
+    k === regionKey ? '#e5ff00' : 'rgba(91,141,248,0.55)');
+  regionChart.update();
+}
+
+// ─── Render KPIs + trend chart for the current filter set ─────────────────────
+function render() {
+  const r = REGION_DATA[selectedRegion];
+
+  document.getElementById('kpi-sales').textContent   = fmtK(r.sales);
+  document.getElementById('kpi-profit').textContent  = fmtUsd(r.profit);
+  document.getElementById('kpi-ratio').textContent    = fmtPct(r.ratio);
+  document.getElementById('kpi-orders').textContent   = r.orders.toLocaleString('en-US');
+  document.getElementById('kpi-discount').textContent = r.discount.toFixed(0) + '%';
+
+  const qualifiers = [`${REGION_LABEL[selectedRegion]}${selectedRegion === 'ALL' ? ' regions' : ''}`];
+  if (selectedProduct !== 'ALL') qualifiers.push(selectedProduct);
+  else if (selectedCategory !== 'ALL') qualifiers.push(selectedCategory);
+  document.getElementById('trend-title').textContent =
+    `Sales & profit ratio by month — ${qualifiers.join(', ')}, Jan–Sep 2026`;
+
+  trendChart.data.datasets[0].data = r.salesMonthly;
+  trendChart.data.datasets[1].data = r.ratioMonthly;
+  trendChart.update();
+
+  regionChart.data.datasets[0].data = REGION_KEYS.map(k => REGION_DATA[k].sales);
+  updateRegionChartHighlight(selectedRegion === 'ALL' ? null : selectedRegion);
+}
+
+// Any filter change funnels through here: recompute the aggregates, then redraw.
+function applyFilters() {
+  rebuildRegionData();
+  render();
+}
+
+// ─── Region dropdown ────────────────────────────────────────────────────────
+const regionBtn   = document.getElementById('region-btn');
+const regionPanel = document.getElementById('region-panel');
+const regionLabelEl = document.getElementById('region-label');
+
+function selectRegion(key) {
+  selectedRegion = key;
+  regionLabelEl.textContent = 'Region: ' + REGION_LABEL[key];
+  regionBtn.classList.toggle('has-value', key !== 'ALL');
+  document.querySelectorAll('#region-panel .dd-item').forEach(el =>
+    el.classList.toggle('selected', el.dataset.region === key));
+  regionPanel.classList.remove('open');
+  render();
+}
+
+regionBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  regionPanel.classList.toggle('open');
+});
+regionPanel.addEventListener('click', (e) => {
+  const item = e.target.closest('.dd-item');
+  if (item) selectRegion(item.dataset.region);
+});
+
+// ─── Category dropdown ──────────────────────────────────────────────────────
+const categoryBtn   = document.getElementById('category-btn');
+const categoryPanel = document.getElementById('category-panel');
+const categoryLabelEl = document.getElementById('category-label');
+
+function renderCategoryPanel() {
+  categoryPanel.innerHTML = ['<div class="dd-item' + (selectedCategory === 'ALL' ? ' selected' : '') + '" data-category="ALL">All categories</div>']
+    .concat(CATEGORIES.map(c => `<div class="dd-item${c === selectedCategory ? ' selected' : ''}" data-category="${c}">${c}</div>`))
+    .join('');
+}
+
+function selectCategory(cat) {
+  selectedCategory = cat;
+  categoryLabelEl.textContent = 'Category: ' + (cat === 'ALL' ? 'All' : cat);
+  categoryBtn.classList.toggle('has-value', cat !== 'ALL');
+  renderCategoryPanel();
+  categoryPanel.classList.remove('open');
+  // Category changed — the Product list (and any selected product outside it) resets.
+  selectProduct('ALL', { skipApply: true });
+  applyFilters();
+}
+
+categoryBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  categoryPanel.classList.toggle('open');
+});
+categoryPanel.addEventListener('click', (e) => {
+  const item = e.target.closest('.dd-item');
+  if (item) selectCategory(item.dataset.category);
+});
+
+// ─── Product dropdown (options depend on the selected Category) ───────────────
+const productBtn   = document.getElementById('product-btn');
+const productPanel = document.getElementById('product-panel');
+const productLabelEl = document.getElementById('product-label');
+
+function renderProductPanel() {
+  const products = selectedCategory === 'ALL' ? ALL_PRODUCTS : PRODUCTS_BY_CATEGORY[selectedCategory];
+  productPanel.innerHTML = ['<div class="dd-item' + (selectedProduct === 'ALL' ? ' selected' : '') + '" data-product="ALL">All products</div>']
+    .concat(products.map(p => `<div class="dd-item${p === selectedProduct ? ' selected' : ''}" data-product="${p}">${p}</div>`))
+    .join('');
+}
+
+function selectProduct(product, opts) {
+  selectedProduct = product;
+  productLabelEl.textContent = 'Product: ' + (product === 'ALL' ? 'All' : product);
+  productBtn.classList.toggle('has-value', product !== 'ALL');
+  renderProductPanel();
+  productPanel.classList.remove('open');
+  if (!opts || !opts.skipApply) applyFilters();
+}
+
+productBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  productPanel.classList.toggle('open');
+});
+productPanel.addEventListener('click', (e) => {
+  const item = e.target.closest('.dd-item');
+  if (item) selectProduct(item.dataset.product);
+});
+
+document.addEventListener('click', () => {
+  regionPanel.classList.remove('open');
+  categoryPanel.classList.remove('open');
+  productPanel.classList.remove('open');
+});
+
+renderCategoryPanel();
+renderProductPanel();
+render();
+</script>
+</body>
+</html>

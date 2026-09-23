@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboards Aren't Dying, They're Getting a Sidekick</title>
+<!--
+  hayaData 2026 — main slide deck (draft 3 arc, 2026-09-07; opening added 2026-09-08).
+  Lean by design: one title + one short description per slide. The talk itself is spoken;
+  this deck is a spine, not a script. Two beats (1 and 4) hand off to the live mocked
+  dashboards in demo/demo-broken.html and demo/demo-fixed.html — this deck does NOT embed
+  them (kept as separate files per the working decision). Beat 6 (the closing) is still
+  PARKED — see narrative-arc.md — and appears here as a placeholder slide.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --canvas: #010101;
+    --card: #282828;
+    --nested: #1e1e1e;
+    --border-subtle: #333;
+    --accent: #e5ff00;
+    --text-primary: #f0f0f0;
+    --text-secondary: #bababa;
+    --text-disabled: #8e8e8e;
+    --text-muted: #5d5d5d;
+    --error: #ff3131;
+    --success: #00b27c;
+    --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--canvas); color: var(--text-primary); font-family: var(--font);
+    overflow: hidden; -webkit-font-smoothing: antialiased;
+  }
+
+  .chrome {
+    position: fixed; top: 0; left: 0; right: 0; padding: 20px 40px;
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 12px; color: var(--text-muted); z-index: 5; pointer-events: none;
+  }
+  .chrome .talk-name { letter-spacing: 0.02em; }
+  .chrome .counter { font-variant-numeric: tabular-nums; }
+
+  .deck { height: 100%; width: 100%; position: relative; }
+  .slide {
+    position: absolute; inset: 0;
+    display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    padding: 80px 120px; text-align: center;
+  }
+  .slide.active { display: flex; }
+
+  .slide h1 {
+    font-size: 52px; font-weight: 800; line-height: 1.15; letter-spacing: -0.01em;
+    max-width: 980px;
+  }
+  .slide h1 .accent { color: var(--accent); }
+  .slide h1 .dim { color: var(--text-disabled); }
+
+  .slide .desc {
+    margin-top: 26px; font-size: 20px; font-weight: 400; color: var(--text-secondary);
+    max-width: 760px; line-height: 1.55;
+  }
+  .slide .desc b { color: var(--text-primary); font-weight: 600; }
+
+  .slide .handoff {
+    margin-top: 34px; display: inline-flex; align-items: center; gap: 10px;
+    font-size: 14px; color: var(--accent); background: rgba(229,255,0,0.08);
+    border: 1px solid rgba(229,255,0,0.35); border-radius: 999px; padding: 8px 18px;
+    font-weight: 600;
+  }
+
+  .placeholder-tag {
+    margin-top: 28px; font-size: 13px; color: var(--text-muted); font-style: italic;
+  }
+
+  /* Thesis slide */
+  .thesis-lines { display: flex; flex-direction: column; gap: 14px; max-width: 880px; }
+  .thesis-lines .l1 { font-size: 40px; font-weight: 700; line-height: 1.3; }
+  .thesis-lines .l2 { font-size: 24px; font-weight: 400; color: var(--text-secondary); line-height: 1.5; }
+  .thesis-lines .l3 { font-size: 30px; font-weight: 700; color: var(--accent); line-height: 1.4; margin-top: 10px; }
+
+  /* Two-exits slide */
+  .exits-row { display: flex; gap: 32px; margin-top: 36px; }
+  .exit-box { background: var(--card); border-radius: 12px; padding: 26px 30px; width: 300px; text-align: left; }
+  .exit-box .exit-name { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+  .exit-box .exit-cost { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
+  .exit-box.time .exit-cost { color: var(--error); }
+  .exit-box.context .exit-cost { color: var(--error); }
+  .exit-box p { font-size: 14px; color: var(--text-secondary); line-height: 1.5; }
+
+  /* Jigsaw table slide */
+  .jig-table { margin-top: 30px; border-collapse: collapse; width: 100%; max-width: 820px; }
+  .jig-table th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-disabled); padding: 0 14px 10px; text-align: left; }
+  .jig-table th.center, .jig-table td.center { text-align: center; }
+  .jig-table td { padding: 12px 14px; border-top: 1px solid var(--border-subtle); font-size: 15px; text-align: left; }
+  .jig-table .win { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+  .jig-table .win.dash { background: var(--accent); }
+  .jig-table .win.agent { background: #5B8DF8; }
+
+  /* Must-have slides */
+  .mh-badge {
+    width: 64px; height: 64px; border-radius: 50%; border: 2px solid var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 800; color: var(--accent); margin-bottom: 24px;
+  }
+
+  .footer-nav {
+    position: fixed; bottom: 22px; left: 0; right: 0;
+    display: flex; justify-content: center; gap: 8px; z-index: 5;
+  }
+  .footer-nav .pip {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--border-subtle); cursor: pointer;
+  }
+  .footer-nav .pip.active { background: var(--accent); width: 18px; border-radius: 4px; }
+
+  /* Side arrows */
+  .nav-arrow {
+    position: fixed; top: 50%; transform: translateY(-50%);
+    width: 48px; height: 48px; border-radius: 50%;
+    background: var(--card); border: 1px solid var(--border-subtle);
+    color: var(--text-secondary); font-size: 22px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; z-index: 6; user-select: none; transition: color .15s, border-color .15s;
+  }
+  .nav-arrow:hover { color: var(--accent); border-color: var(--accent); }
+  .nav-arrow.prev { left: 28px; }
+  .nav-arrow.next { right: 28px; }
+  .nav-arrow.disabled { opacity: 0.25; pointer-events: none; }
+</style>
+</head>
+<body>
+
+<div class="chrome">
+  <span class="talk-name">Dashboards Aren't Dying, They're Getting a Sidekick</span>
+  <span class="counter" id="counter">1 / 15</span>
+</div>
+
+<div class="deck" id="deck">
+
+  <!-- 1 — Title -->
+  <section class="slide active">
+    <h1>Dashboards Aren't Dying,<br>They're Getting a <span class="accent">Sidekick</span></h1>
+    <div class="desc">hayaData 2026 &nbsp;·&nbsp; Haim Moscovici, WSC Sports &nbsp;·&nbsp; 15 min</div>
+  </section>
+
+  <!-- 2 — Opening: the hook -->
+  <section class="slide">
+    <h1><span class="accent">80%</span> of the times, people leave a dashboard with <span class="accent">more questions</span> than they came with.</h1>
+    <div class="desc">That's not a bug. That's a feature.</div>
+  </section>
+
+  <!-- 2b — Opening: who + what -->
+  <section class="slide">
+    <h1>Haim Moscovici</h1>
+    <div class="desc">Data analytics, WSC Sports. On both ends of those questions.<br><br>
+      Where the questions go today &nbsp;·&nbsp; why the obvious fix doesn't work &nbsp;·&nbsp; what it looks like when the dashboard answers them itself.</div>
+  </section>
+
+  <!-- 3 — Beat 1 hand-off -->
+  <section class="slide">
+    <h1>You've all built <span class="accent">this</span> dashboard.</h1>
+    <div class="desc">Watch what happens thirty seconds after someone reads it.</div>
+    <div class="handoff">↳ switch to demo-broken.html</div>
+  </section>
+
+  <!-- 4 — Thesis -->
+  <section class="slide">
+    <div class="thesis-lines">
+      <div class="l1">Every dashboard ends with a follow-up question.</div>
+      <div class="l2">Leave the page to ask an analyst and you lose time.<br>Leave it to ask an agent and you lose context.</div>
+      <div class="l3">Dashboards don't need replacing. They need a way to answer back.</div>
+    </div>
+  </section>
+
+  <!-- 5 — Beat 2: the two exits -->
+  <section class="slide">
+    <h1>The question has to go <span class="accent">somewhere</span>.</h1>
+    <div class="exits-row">
+      <div class="exit-box time">
+        <div class="exit-name">The analyst</div>
+        <div class="exit-cost">Cost: time</div>
+        <p>Works. Costs two people an afternoon — the stakeholder waits, the analyst is pulled off a report they already finished.</p>
+      </div>
+      <div class="exit-box context">
+        <div class="exit-name">The standalone agent</div>
+        <div class="exit-cost">Cost: context</div>
+        <p>Fast — and the first thing it asks is which report, which filters, what you mean. The human re-supplies the context, badly.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 — Beat 3 opener: steelman -->
+  <section class="slide">
+    <h1>"Why not just work<br>with <span class="accent">an agent</span>?"</h1>
+    <div class="desc">Every dashboard is a frozen answer to a question someone asked six months ago.<br>
+      The agent answers fresh — any question, any slice. Why keep the dashboard at all?</div>
+  </section>
+
+  <!-- 7 — Beat 3: the jigsaw table -->
+  <section class="slide">
+    <h1>Because they're not competing. <span class="dim">They fit.</span></h1>
+    <table class="jig-table">
+      <thead><tr><th>Dimension</th><th class="center">Dashboard</th><th class="center">Agent</th></tr></thead>
+      <tbody>
+        <tr><td>Speed of a first look</td><td class="center"><span class="win dash"></span></td><td class="center"></td></tr>
+        <tr><td>Flexibility &amp; agility</td><td class="center"></td><td class="center"><span class="win agent"></span></td></tr>
+        <tr><td>Shared truth</td><td class="center"><span class="win dash"></span></td><td class="center"></td></tr>
+        <tr><td>Presentation</td><td class="center"></td><td class="center"><span class="win agent"></span></td></tr>
+        <tr><td>Trust</td><td class="center"><span class="win dash"></span></td><td class="center"></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 8 — Beat 3 landing -->
+  <section class="slide">
+    <h1><span class="accent">The report is the prompt.</span></h1>
+    <div class="desc">The dashboard has the context and can't use it.<br>The agent can use context and doesn't have it.<br><b>So put the agent on the page.</b></div>
+  </section>
+
+  <!-- 9 — Beat 4 hand-off -->
+  <section class="slide">
+    <h1>Same dashboard. <span class="accent">One new thing.</span></h1>
+    <div class="desc">Same filter. Same question. Watch what's different this time.</div>
+    <div class="handoff">↳ switch to demo-fixed.html</div>
+  </section>
+
+  <!-- 10 — Beat 5 frame -->
+  <section class="slide">
+    <h1>What it takes</h1>
+    <div class="desc">Three things you have to build for the handover to be real.</div>
+  </section>
+
+  <!-- 11 — Must-have: grounding -->
+  <section class="slide">
+    <div class="mh-badge">1</div>
+    <h1>Grounding</h1>
+    <div class="desc">The agent inherits the report's query and definitions.<br>It does not infer its own.</div>
+  </section>
+
+  <!-- 12 — Must-have: trust -->
+  <section class="slide">
+    <div class="mh-badge">2</div>
+    <h1>Trust</h1>
+    <div class="desc">Show the work — or say <b>"I can't answer that from this report."</b><br>That refusal is a feature, not a failure.</div>
+  </section>
+
+  <!-- 13 — Must-have: permissions -->
+  <section class="slide">
+    <div class="mh-badge">3</div>
+    <h1>Permissions</h1>
+    <div class="desc">Some filters aren't a choice — they're the rows the viewer is allowed to see.<br>The agent answers for the page the viewer has, not the table the warehouse has.</div>
+  </section>
+
+
+  <!-- 15 — Closing (parked) -->
+  <section class="slide">
+    <h1><span class="dim">Closing —</span> TBD</h1>
+    <div class="desc">Leading candidate: what changes for the analyst — from the follow-up queue<br>
+      to defining the ground the agent stands on. Then the thesis, restated.</div>
+    <div class="placeholder-tag">parked — closing still to decide</div>
+  </section>
+
+</div>
+
+<div class="footer-nav" id="pips"></div>
+<div class="nav-arrow prev" id="prev" title="Previous">&#8592;</div>
+<div class="nav-arrow next" id="next" title="Next">&#8594;</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  const counter = document.getElementById('counter');
+  const pipsEl = document.getElementById('pips');
+  let i = 0;
+
+  slides.forEach((_, idx) => {
+    const pip = document.createElement('div');
+    pip.className = 'pip' + (idx === 0 ? ' active' : '');
+    pip.addEventListener('click', () => go(idx));
+    pipsEl.appendChild(pip);
+  });
+  const pips = document.querySelectorAll('.pip');
+
+  function go(n) {
+    if (n < 0 || n >= slides.length) return;
+    slides[i].classList.remove('active');
+    pips[i].classList.remove('active');
+    i = n;
+    slides[i].classList.add('active');
+    pips[i].classList.add('active');
+    counter.textContent = (i + 1) + ' / ' + slides.length;
+    syncArrows();
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') go(i + 1);
+    if (e.key === 'ArrowLeft' || e.key === 'PageUp') go(i - 1);
+    if (e.key === 'Home') go(0);
+    if (e.key === 'End') go(slides.length - 1);
+  });
+  const prevBtn = document.getElementById('prev');
+  const nextBtn = document.getElementById('next');
+  prevBtn.addEventListener('click', () => go(i - 1));
+  nextBtn.addEventListener('click', () => go(i + 1));
+  function syncArrows() {
+    prevBtn.classList.toggle('disabled', i === 0);
+    nextBtn.classList.toggle('disabled', i === slides.length - 1);
+  }
+  syncArrows();
+</script>
+</body>
+</html>
