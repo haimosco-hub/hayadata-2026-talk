@@ -5,11 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dashboards Aren't Dying, They're Getting a Sidekick</title>
 <!--
-  hayaData 2026 — main slide deck (draft 3 arc, 2026-09-07; opening added 2026-09-08).
+  hayaData 2026 — main slide deck (draft 3 arc, 2026-09-07; opening added 2026-09-08;
+  dashboard slide embedded 2026-09-28).
   Lean by design: one title + one short description per slide. The talk itself is spoken;
   this deck is a spine, not a script. Two beats (1 and 4) hand off to the live mocked
-  dashboards in demo/demo-broken.html and demo/demo-fixed.html — this deck does NOT embed
-  them (kept as separate files per the working decision). Beat 6 (the closing) is still
+  dashboards in demo/demo-broken.html and demo/demo-fixed.html — those two stay separate
+  files, switched to live during the talk (unchanged working decision). The Superstore
+  Executive Dashboard (position 5, between the Beat 1 hand-off and the Thesis) is the one
+  exception: it IS embedded directly, via iframe onto demo/dashboard.html, so it can be
+  clicked through inline without leaving the deck. Beat 6 (the closing) is still
   PARKED — see narrative-arc.md — and appears here as a placeholder slide.
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -83,6 +87,22 @@
   .thesis-lines .l2 { font-size: 24px; font-weight: 400; color: var(--text-secondary); line-height: 1.5; }
   .thesis-lines .l3 { font-size: 30px; font-weight: 700; color: var(--accent); line-height: 1.4; margin-top: 10px; }
 
+  /* Dashboard slide — the embedded live demo (iframe onto demo/dashboard.html).
+     The dashboard's own layout is fixed-height content (chart-box is a hard 260px in
+     the shared theme), so instead of letting it scroll inside the slide, the iframe is
+     rendered at its natural single-row-filter size (1800x930 — narrower and the filter
+     pills wrap to a second row, taller than needed and it's just wasted space) and then
+     scaled as one unit to fit whatever the slide's box turns out to be. */
+  .slide.dashboard-slide { padding: 76px 96px 64px; }
+  .dash-frame {
+    width: 100%; height: 100%; border-radius: 12px; overflow: hidden;
+    background: #010101; position: relative;
+  }
+  .dash-frame iframe {
+    position: absolute; width: 1800px; height: 930px; border: none;
+    transform-origin: top left;
+  }
+
   /* Two-exits slide */
   .exits-row { display: flex; gap: 32px; margin-top: 36px; }
   .exit-box { background: var(--card); border-radius: 12px; padding: 26px 30px; width: 300px; text-align: left; }
@@ -136,7 +156,7 @@
 
 <div class="chrome">
   <span class="talk-name">Dashboards Aren't Dying, They're Getting a Sidekick</span>
-  <span class="counter" id="counter">1 / 15</span>
+  <span class="counter" id="counter">1 / 16</span>
 </div>
 
 <div class="deck" id="deck">
@@ -165,6 +185,13 @@
     <h1>You've all built <span class="accent">this</span> dashboard.</h1>
     <div class="desc">Watch what happens thirty seconds after someone reads it.</div>
     <div class="handoff">↳ switch to demo-broken.html</div>
+  </section>
+
+  <!-- 3b — Live demo: Superstore Executive Dashboard (embedded) -->
+  <section class="slide dashboard-slide">
+    <div class="dash-frame" id="dash-frame">
+      <iframe id="dash-iframe" src="demo/dashboard.html" title="Superstore Executive Dashboard" loading="lazy"></iframe>
+    </div>
   </section>
 
   <!-- 4 — Thesis -->
@@ -293,7 +320,28 @@
     pips[i].classList.add('active');
     counter.textContent = (i + 1) + ' / ' + slides.length;
     syncArrows();
+    if (slides[i].classList.contains('dashboard-slide')) fitDashboard();
   }
+
+  /* Scale the embedded dashboard (fixed 1800x930 intrinsic size) as one unit to
+     fit whatever box the slide turns out to have — see the CSS comment above
+     .dash-frame for why this is a scale, not a responsive reflow or a scroll. */
+  const dashFrame = document.getElementById('dash-frame');
+  const dashIframe = document.getElementById('dash-iframe');
+  function fitDashboard() {
+    if (!dashFrame || !dashIframe) return;
+    const iw = 1800, ih = 930;
+    const cw = dashFrame.clientWidth, ch = dashFrame.clientHeight;
+    if (!cw || !ch) return;
+    const scale = Math.min(cw / iw, ch / ih);
+    const left = (cw - iw * scale) / 2, top = (ch - ih * scale) / 2;
+    dashIframe.style.left = left + 'px';
+    dashIframe.style.top = top + 'px';
+    dashIframe.style.transform = 'scale(' + scale + ')';
+  }
+  window.addEventListener('resize', () => {
+    if (slides[i].classList.contains('dashboard-slide')) fitDashboard();
+  });
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') go(i + 1);
@@ -310,6 +358,7 @@
     nextBtn.classList.toggle('disabled', i === slides.length - 1);
   }
   syncArrows();
+  if (slides[i].classList.contains('dashboard-slide')) fitDashboard();
 </script>
 </body>
 </html>

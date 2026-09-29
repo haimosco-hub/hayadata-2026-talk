@@ -23,8 +23,10 @@
 
   The State map renders real US state geography via chartjs-chart-geo (a Chart.js
   choropleth controller, loaded from cdn.jsdelivr.net) fed by us-atlas topojson
-  boundaries bundled locally as us-states-10m.json (fetched same-origin, not from
-  a CDN, so it works offline and inside a sandboxed Artifact preview).
+  boundaries, inlined directly as US_TOPOJSON (us-states-topojson-data.js) rather than
+  fetched at runtime — this page can be opened as a plain local file, embedded in an
+  iframe, or run inside a sandboxed Artifact preview and the map still renders, since
+  there's no fetch() to be blocked by a file:// origin or a CSP.
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -218,6 +220,7 @@
 </main>
 
 <script src="dashboard_data.js"></script>
+<script src="us-states-topojson-data.js"></script>
 <script>
 Chart.register(ChartDataLabels);
 
@@ -235,16 +238,12 @@ const STATE_NAME = {
 };
 const NAME_TO_ABBR = Object.fromEntries(Object.entries(STATE_NAME).map(([abbr, name]) => [name, abbr]));
 
-/* ── real US state geometry (topojson, fetched once from cdn.jsdelivr.net) ── */
-let US_STATES_FEATURES = null, US_NATION_FEATURE = null;
-fetch('us-states-10m.json')
-  .then(r => r.json())
-  .then(us => {
-    US_NATION_FEATURE = ChartGeo.topojson.feature(us, us.objects.nation).features[0];
-    US_STATES_FEATURES = ChartGeo.topojson.feature(us, us.objects.states).features;
-    renderMap(filteredRows());
-  })
-  .catch(() => { /* offline or CDN blocked — map card stays empty, every other chart is unaffected */ });
+/* ── real US state geometry (topojson, inlined via US_TOPOJSON — no runtime fetch, so
+   it works identically over file://, a bare static server, or a sandboxed preview; a
+   fetch() here previously left the map silently blank whenever this page was opened
+   directly as a local file, since browsers block fetch() from file:// origins) ── */
+const US_NATION_FEATURE = ChartGeo.topojson.feature(US_TOPOJSON, US_TOPOJSON.objects.nation).features[0];
+const US_STATES_FEATURES = ChartGeo.topojson.feature(US_TOPOJSON, US_TOPOJSON.objects.states).features;
 
 /* ── tiny DOM/util helpers ───────────────────────────────────────────────── */
 function escHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -771,7 +770,6 @@ function renderChartCard(cardId, canvasId, horizontal, rows) {
 
 /* ── real US-state choropleth map (chartjs-chart-geo + us-atlas topojson) ── */
 function renderMap(rows) {
-  if (!US_STATES_FEATURES) return; // topojson still loading — fetch's .then() calls this again once ready
   const data = buildCardData('map', rows);
   const byState = new Map(data.map(d => [d.label, d.val]));
   const maxAbs = Math.max(1, ...data.map(d => Math.abs(d.val)));
