@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>hayaData 2026 — Talk Index</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --canvas: #010101; --card: #282828; --border: #404040;
+    --accent: #e5ff00; --text-primary: #f0f0f0; --text-secondary: #bababa;
+    --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--canvas); color: var(--text-primary); font-family: var(--font); padding: 48px 24px; }
+  main { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+  p.sub { color: var(--text-secondary); margin-bottom: 32px; font-size: 15px; }
+  .links { display: flex; flex-direction: column; gap: 12px; }
+  a.link-card {
+    display: block; background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px 20px; color: var(--text-primary); text-decoration: none; transition: border-color .15s;
+  }
+  a.link-card:hover { border-color: var(--accent); }
+  a.link-card .title { font-weight: 600; font-size: 16px; }
+  a.link-card .desc { color: var(--text-secondary); font-size: 13px; margin-top: 4px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>hayaData 2026 talk</h1>
+  <p class="sub">Presentation, narrative, and live demo materials.</p>
+  <div class="links">
+    <a class="link-card" href="presentation.html">
+      <div class="title">Presentation</div>
+      <div class="desc">The slide deck for the talk.</div>
+    </a>
+    <a class="link-card" href="demo/dashboard.html">
+      <div class="title">Superstore Executive Dashboard</div>
+      <div class="desc">Live interactive demo — KPIs, US-state map, filters, over the Superstore sample dataset.</div>
+    </a>
+    <a class="link-card" href="demo/demo-broken.html">
+      <div class="title">Demo — Broken flow</div>
+      <div class="desc">The "before" mock: the escape-to-Slack workflow.</div>
+    </a>
+    <a class="link-card" href="demo/demo-fixed.html">
+      <div class="title">Demo — Fixed flow</div>
+      <div class="desc">The "after" mock: the agent embedded on the report.</div>
+    </a>
+  </div>
+</main>
+</body>
+</html>
