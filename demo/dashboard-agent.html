@@ -1,0 +1,1426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Superstore Executive Overview + Agent</title>
+<!--
+  hayaData 2026 talk — Executive Overview dashboard WITH AN EMBEDDED AGENT RAIL.
+  Identical to dashboard.html (same data, filters, charts) plus a right-hand rail that
+  behaves like an agent living on the report: the prompt box is pre-seeded with the
+  current view as context (the applied date range + every non-"All" filter), and the
+  answer renders right under it. The context block re-syncs whenever filters are
+  applied; the user's own question text below it is preserved across re-syncs.
+  Answers come from AGENT_ENDPOINT when one is configured (POST {prompt}); without
+  one, a local grounded mock computes the answer straight from the filtered rows, so
+  the talk demo works offline exactly like the rest of this page.
+
+  Base dashboard notes (unchanged):
+  Executive Overview dashboard, built entirely from the real
+  Superstore sample (sample_-_superstore.xls, US rows only — see generate_dashboard_data.py
+  for exactly which columns feed which chart). No fixed year split any more: a global
+  date-range + dimension filter bar (top-left) narrows every card at once, styled and
+  behaved after the internal reports-playground filter-bar/date-picker pattern (vendored
+  here as plain, self-contained JS/CSS — no external dependency — so the talk demo never
+  depends on a live network or another repo being checked out on the machine it runs on).
+
+  The sample data runs through 2026-12-30, but rows after the real today (read from the
+  browser's own clock at load time) are dropped entirely, not just hidden behind a
+  disabled calendar day — a live dashboard can't show business that hasn't happened yet.
+  Default view on load: last 7 days, Day granularity on the overtime chart.
+
+  "Manufacturer" isn't a real column in this dataset; it's approximated as the first
+  word of Product Name, the same heuristic the public Tableau Superstore tutorials use.
+
+  The State map renders real US state geography via chartjs-chart-geo (a Chart.js
+  choropleth controller, loaded from cdn.jsdelivr.net) fed by us-atlas topojson
+  boundaries, inlined directly as US_TOPOJSON (us-states-topojson-data.js) rather than
+  fetched at runtime — this page can be opened as a plain local file, embedded in an
+  iframe, or run inside a sandboxed Artifact preview and the map still renders, since
+  there's no fetch() to be blocked by a file:// origin or a CSP.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-chart-geo@4.3.6/build/index.umd.min.js"></script>
+<link rel="stylesheet" href="dashboard-theme.css">
+<style>
+  /* ── page-local additions on top of the shared theme (theme file itself is untouched) ── */
+  .metric-toggle { display: flex; gap: 8px; flex-shrink: 0; }
+  .metric-toggle button {
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 18px; color: var(--text-secondary); font-family: var(--font);
+    font-size: 14px; font-weight: 600; cursor: pointer; transition: background .15s, color .15s;
+  }
+  .metric-toggle button:hover { border-color: var(--accent); color: var(--text-primary); }
+  .metric-toggle button.active { background: var(--accent); color: var(--canvas); border-color: var(--accent); }
+
+  .kpi-row.cols-4 { grid-template-columns: repeat(4, 1fr); }
+  .metric-card { min-width: 0; }
+
+  .gran-toggle { display: flex; gap: 2px; flex-shrink: 0; }
+  .gran-toggle button {
+    background: var(--nested); border: 1px solid var(--border); color: var(--text-secondary);
+    font-family: var(--font); font-size: 11px; font-weight: 600; padding: 5px 9px;
+    cursor: pointer; transition: background .15s, color .15s;
+  }
+  .gran-toggle button:first-child { border-radius: 6px 0 0 6px; }
+  .gran-toggle button:last-child { border-radius: 0 6px 6px 0; }
+  .gran-toggle button + button { border-left: none; }
+  .gran-toggle button:hover { color: var(--text-primary); }
+  .gran-toggle button.active { background: var(--accent); color: var(--canvas); border-color: var(--accent); }
+
+  .report-body .card { min-width: 0; }
+  .card-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chart-box, .chart-box canvas { max-width: 100%; }
+
+  /* ═══════════════════════════════════════════════════════════════
+     FILTER BAR — global dropdowns + date picker, vendored to match the
+     reports-playground dashboard pattern (dd-wrap/dd-btn/dd-panel, dp-*).
+     Plain CSS, no proprietary values — same design tokens as dashboard-theme.css.
+  ═══════════════════════════════════════════════════════════════ */
+  .dd-wrap { position: relative; }
+  .dd-btn.filter-dd {
+    display: flex; align-items: center; gap: 8px; cursor: pointer; transition: border-color .15s;
+  }
+  .dd-btn.open      { border-color: var(--text-primary); color: var(--text-primary); }
+  .dd-label { flex: 1; text-align: left; }
+  .dd-clear { display: none; align-items: center; justify-content: center; width: 14px; height: 14px; flex-shrink: 0; color: var(--text-disabled); }
+  .dd-clear:hover { color: var(--text-primary); }
+  .dd-clear svg { width: 10px; height: 10px; }
+  .dd-btn.has-value .dd-clear { display: flex; }
+  .dd-btn.filter-dd .dd-chevron { transition: transform .15s; }
+  .dd-btn.open .dd-chevron { transform: rotate(180deg); }
+
+  .dd-panel {
+    position: absolute; top: calc(100% + 4px); left: 0; min-width: 220px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 4px; z-index: 100; display: none; flex-direction: column;
+  }
+  .dd-panel.open { display: flex; }
+  .dd-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 6px; font-size: 13px; color: var(--text-secondary); cursor: pointer; user-select: none; white-space: nowrap; }
+  .dd-item:hover { background: var(--border-subtle); color: var(--text-primary); }
+  .ms-cb { width: 16px; height: 16px; border-radius: 2px; border: 1px solid var(--text-primary); background: transparent; flex-shrink: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+  .dd-item.selected .ms-cb { background: var(--text-primary); border-color: var(--text-primary); }
+  .ms-cb svg { display: none; width: 10px; height: 10px; color: var(--card); }
+  .dd-item.selected .ms-cb svg { display: block; }
+  .dd-divider { height: 1px; background: var(--border); margin: 2px 8px; }
+  .dd-items-scroll { max-height: 320px; overflow-y: auto; }
+  .dd-search-row { display: flex; align-items: center; gap: 8px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; height: 32px; padding: 0 8px; margin-bottom: 4px; position: sticky; top: 0; z-index: 1; }
+  .dd-search-icon { width: 16px; height: 16px; flex-shrink: 0; }
+  .dd-search-input { flex: 1; background: transparent; border: none; outline: none; color: var(--text-primary); font-size: 14px; font-family: var(--font); }
+  .dd-search-input::placeholder { color: var(--text-secondary); }
+
+  .filter-apply-btn { height: 32px; padding: 0 16px; background: var(--accent); border: none; border-radius: 8px; font-family: var(--font); font-size: 14px; font-weight: 600; color: var(--canvas); cursor: pointer; white-space: nowrap; }
+  .filter-apply-btn:hover:not(:disabled) { background: var(--accent-hover); }
+  .filter-apply-btn:disabled { background: var(--border); color: var(--text-muted); cursor: default; }
+  .filter-clear-btn { height: 32px; padding: 0 8px; background: transparent; border: none; font-family: var(--font); font-size: 14px; font-weight: 400; color: var(--accent); cursor: pointer; white-space: nowrap; }
+  .filter-clear-btn:hover { text-decoration: underline; }
+
+  #dp-wrap { position: relative; }
+  #dp-trigger { display: flex; align-items: center; gap: 8px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 0 12px; cursor: pointer; color: var(--text-secondary); font-size: 14px; font-family: var(--font); min-width: 200px; height: 36px; transition: border-color .15s; }
+  #dp-trigger:hover { border-color: var(--text-disabled); color: var(--text-primary); }
+  #dp-trigger.open  { border-color: var(--accent); color: var(--text-primary); }
+  #dp-trigger svg { width: 16px; height: 16px; flex-shrink: 0; }
+  #dp-panel { position: absolute; top: calc(100% + 4px); left: 0; background: var(--overlay); border: 1px solid var(--border); border-radius: 8px; padding: 16px; z-index: 200; display: none; gap: 16px; }
+  #dp-panel.open { display: flex; }
+  .dp-shortcuts { display: flex; flex-direction: column; gap: 2px; min-width: 130px; }
+  .dp-shortcut { padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
+  .dp-shortcut:hover { background: var(--border-subtle); color: var(--text-primary); }
+  .dp-shortcut.active { color: var(--accent); background: var(--accent-muted); }
+  .dp-cal { display: flex; flex-direction: column; gap: 8px; }
+  .dp-nav { display: flex; align-items: center; justify-content: space-between; padding: 0 2px; }
+  .dp-nav-btn { background: none; border: none; cursor: pointer; color: var(--text-secondary); padding: 4px; border-radius: 4px; display: flex; }
+  .dp-nav-btn:hover { background: var(--border-subtle); color: var(--text-primary); }
+  .dp-nav-btn svg { width: 16px; height: 16px; display: block; }
+  .dp-month-label { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+  .dp-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0; }
+  .dp-weekday { font-size: 11px; color: var(--text-disabled); text-align: center; padding: 4px 0; font-weight: 600; }
+  .dp-cell { display: flex; align-items: center; justify-content: center; }
+  .dp-cell.in-range { background: var(--accent-range, rgba(229,255,0,0.15)); }
+  .dp-cell.range-start { background: linear-gradient(to right, transparent 50%, var(--accent-range, rgba(229,255,0,0.15)) 50%); }
+  .dp-cell.range-end { background: linear-gradient(to left, transparent 50%, var(--accent-range, rgba(229,255,0,0.15)) 50%); }
+  .dp-day { width: 30px; height: 30px; border-radius: 50%; margin: 1px auto; background: transparent; border: none; display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--text-secondary); cursor: pointer; font-family: var(--font); }
+  .dp-day:hover { background: var(--border-subtle); color: var(--text-primary); }
+  .dp-day.other-month { color: var(--text-disabled); }
+  .dp-day.disabled, .dp-day.other-month.disabled { color: #3a3a3a; cursor: default; pointer-events: none; }
+  .dp-day.disabled:hover { background: transparent; color: #3a3a3a; }
+  .dp-day.selected, .dp-day.range-dot { background: var(--accent); color: var(--canvas); font-weight: 600; }
+  .dp-apply-row { display: flex; justify-content: flex-end; margin-top: 8px; }
+  .dp-apply-btn { height: 32px; padding: 0 16px; background: var(--accent); border: none; border-radius: 8px; font-family: var(--font); font-size: 14px; font-weight: 600; color: var(--canvas); cursor: pointer; }
+  .dp-apply-btn:hover:not(:disabled) { background: var(--accent-hover); }
+  .dp-apply-btn:disabled { background: var(--border); color: var(--text-muted); cursor: default; }
+
+  /* ═══════════════════════════════════════════════════════════════
+     PAGE SHELL + AGENT RAIL — the dashboard keeps its own layout on the left;
+     the rail is a sticky full-height column on the right, styled with the theme's
+     existing ask-box tokens (.ask-input / .ask-btn / .chat-*).
+  ═══════════════════════════════════════════════════════════════ */
+  .page { display: flex; align-items: flex-start; min-height: 100vh; }
+  .page-main { flex: 1 1 auto; min-width: 0; }
+  .page-main .filter-bar, .page-main .report-body { padding-left: 32px; padding-right: 24px; }
+
+  /* Sizing (.collapsed) and layout-mode (.narrow) are deliberately separate classes.
+     .collapsed only ever changes flex-basis, so there is exactly one thing animating
+     and the GPU can run it smoothly. .narrow — which swaps the header to a stacked
+     column and hides the body — is applied by JS with a timing offset (see the
+     toggleRail() handler): added only AFTER the shrink finishes, removed immediately
+     before the grow starts. In between, the (still wide) expanded content simply gets
+     clipped by this box's own overflow:hidden as it narrows, like a window shade —
+     no layout thrash, no content popping mid-transition, which is what reads as
+     "stuttering". Height is NEVER part of either class: min-height: 100vh always
+     holds, so the collapsed rail stays a full-height grey column, not a short tab. */
+  .agent-rail {
+    flex: 0 0 380px; min-height: 100vh; position: sticky; top: 0; overflow: hidden;
+    background: var(--overlay); border-left: 1px solid var(--border-subtle);
+    display: flex; flex-direction: column;
+    transition: flex-basis .32s cubic-bezier(.4,0,.2,1);
+  }
+  .agent-rail.collapsed { flex-basis: 48px; }
+  .agent-rail.narrow .rail-body, .agent-rail.narrow .rail-head-text { display: none; }
+
+  .rail-head { display: flex; align-items: center; gap: 10px; padding: 16px 16px 12px; border-bottom: 1px solid var(--border-subtle); }
+  .rail-head .chat-avatar.agent { width: 28px; height: 28px; font-size: 13px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .rail-head-text { flex: 1; min-width: 0; }
+  .rail-title { font-size: 15px; font-weight: 700; color: var(--text-primary); line-height: 1.2; white-space: nowrap; }
+  .rail-toggle { background: none; border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); width: 28px; height: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .rail-toggle:hover { color: var(--text-primary); border-color: var(--text-disabled); }
+  .rail-toggle svg { width: 14px; height: 14px; transition: transform .25s ease; }
+  .agent-rail.narrow .rail-toggle svg { transform: rotate(180deg); }
+  .agent-rail.narrow .rail-head { flex-direction: column; padding: 12px 10px; border-bottom: none; }
+
+  .rail-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+  /* the thread (answers render here) — squeezed: capped so the composer below gets the room */
+  .rail-thread { flex: 0 1 auto; padding: 8px 16px; display: flex; flex-direction: column; gap: 10px; }
+  .rail-thread .chat-msg { margin-bottom: 0; }
+  .rail-thread .chat-bubble { font-size: 13px; }
+  .rail-thread .chat-bubble.question { white-space: pre-wrap; }
+  .rail-thread .chat-bubble p + p { margin-top: 8px; }
+  .rail-thread .chat-bubble ul { padding-left: 16px; margin-top: 6px; }
+  .rail-thread .chat-bubble li { margin: 3px 0; }
+  .rail-thread .chat-bubble .num { color: var(--accent); font-weight: 600; }
+  .rail-thread .chat-bubble .neg { color: var(--error); font-weight: 600; }
+  .rail-ctx-line { font-size: 11px; color: var(--text-muted); margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
+  .rail-ctx-line span { background: var(--nested); border-radius: 3px; padding: 1px 6px; }
+  .rail-empty { color: var(--text-disabled); font-size: 13px; line-height: 1.5; padding: 8px 2px; }
+  .rail-empty b { color: var(--text-secondary); }
+  .typing { display: inline-flex; gap: 4px; align-items: center; height: 14px; }
+  .typing i { width: 5px; height: 5px; border-radius: 50%; background: var(--text-disabled); animation: tp 1.1s infinite ease-in-out; }
+  .typing i:nth-child(2) { animation-delay: .15s; } .typing i:nth-child(3) { animation-delay: .3s; }
+  @keyframes tp { 0%, 80%, 100% { opacity: .25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-2px); } }
+
+  /* composer: suggestions + the prompt textarea (context block lives INSIDE it) + send —
+     this is the dominant area of the rail; the thread above is capped to make room for it */
+  .rail-composer { flex: 0 0 auto; padding: 18px 16px 20px; border-top: 1px solid var(--border-subtle); background: var(--overlay); }
+  .rail-composer .ask-suggest { margin-bottom: 14px; gap: 8px; }
+  .rail-composer .ask-suggest button { font-size: 13px; padding: 8px 14px; }
+  .rail-prompt-wrap { position: relative; }
+  .rail-prompt {
+    width: 100%; min-height: 280px; max-height: 480px; resize: vertical;
+    background: var(--nested); border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px 14px 48px; color: var(--text-primary); font-family: var(--font);
+    font-size: 14px; line-height: 1.6; outline: none; transition: border-color .15s;
+  }
+  .rail-prompt:focus { border-color: var(--accent); }
+  .rail-prompt::placeholder { color: var(--text-disabled); }
+  .rail-prompt-actions { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 6px; align-items: center; }
+  .rail-hint { font-size: 11px; color: var(--text-muted); margin-right: 4px; }
+  .rail-reset { background: none; border: 1px solid var(--border-subtle); border-radius: 6px; color: var(--text-disabled); font-family: var(--font); font-size: 12px; padding: 6px 10px; cursor: pointer; }
+  .rail-reset:hover { color: var(--text-primary); border-color: var(--border); }
+  .rail-send { height: 34px; padding: 0 16px; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+  .rail-send svg { width: 14px; height: 14px; }
+
+  @media (max-width: 1280px) { .agent-rail { flex-basis: 320px; width: 320px; } }
+</style>
+</head>
+<body>
+
+<div class="page">
+<div class="page-main">
+
+<div class="filter-bar" id="filter-bar">
+  <div class="metric-toggle" id="metric-toggle">
+    <button data-metric="sales" class="active">Sales</button>
+    <button data-metric="profit">Profit</button>
+    <button data-metric="orders">Orders</button>
+  </div>
+</div>
+
+<main class="report-body">
+
+  <div class="kpi-row cols-4">
+    <div class="metric-card">
+      <div class="metric-label">Sales</div>
+      <div class="metric-value" id="kpi-sales-value">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Profit</div>
+      <div class="metric-value" id="kpi-profit-value">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label"># Orders</div>
+      <div class="metric-value" id="kpi-orders-value">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label"># Customers</div>
+      <div class="metric-value" id="kpi-customers-value">—</div>
+    </div>
+  </div>
+
+  <div class="card span-6">
+    <div class="card-header">
+      <span class="card-title" id="title-overtime">Sales Over Time</span>
+      <div class="gran-toggle" id="gran-toggle">
+        <button data-gran="day" class="active">Day</button>
+        <button data-gran="week">Week</button>
+        <button data-gran="month">Month</button>
+        <button data-gran="quarter">Quarter</button>
+        <button data-gran="year">Year</button>
+      </div>
+    </div>
+    <div class="chart-box"><canvas id="chart-overtime"></canvas></div>
+  </div>
+
+  <div class="card span-3">
+    <div class="card-header"><span class="card-title" id="title-map">Sales | By State</span></div>
+    <div class="chart-box"><canvas id="chart-map"></canvas></div>
+  </div>
+
+  <div class="card span-3">
+    <div class="card-header"><span class="card-title" id="title-segment">Sales | By Segment</span></div>
+    <div class="chart-box"><canvas id="chart-segment"></canvas></div>
+  </div>
+
+  <div class="card span-3">
+    <div class="card-header"><span class="card-title" id="title-mfg">Sales | By Top 10 Manufacturers</span></div>
+    <div class="chart-box"><canvas id="chart-mfg"></canvas></div>
+  </div>
+
+  <div class="card span-3">
+    <div class="card-header"><span class="card-title" id="title-subcat">Sales | By Sub-Category (Top 10)</span></div>
+    <div class="chart-box"><canvas id="chart-subcat"></canvas></div>
+  </div>
+
+  <div class="card span-3">
+    <div class="card-header"><span class="card-title" id="title-customers">Sales | By Top 10 Customers</span></div>
+    <div class="chart-box"><canvas id="chart-customers"></canvas></div>
+  </div>
+
+  <div class="card span-3">
+    <div class="card-header"><span class="card-title" id="title-category">Sales | By Category</span></div>
+    <div class="chart-box"><canvas id="chart-category"></canvas></div>
+  </div>
+
+</main>
+
+</div><!-- /.page-main -->
+
+<aside class="agent-rail collapsed narrow" id="agent-rail" aria-label="Report agent">
+  <div class="rail-head">
+    <div class="chat-avatar agent">
+      <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M12 2l2.2 6.8L21 11l-6.8 2.2L12 20l-2.2-6.8L3 11l6.8-2.2L12 2z" fill="currentColor"/></svg>
+    </div>
+    <div class="rail-head-text">
+      <div class="rail-title">Ask the Sidekick</div>
+    </div>
+    <button class="rail-toggle" id="rail-toggle" title="Collapse / expand">
+      <svg viewBox="0 0 16 16" fill="none"><path d="M10 3l5 5-5 5M5 3l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+
+  <div class="rail-body">
+    <div class="rail-chips" id="rail-chips" hidden></div>
+    <span class="sync" id="rail-sync" hidden></span>
+
+    <div class="rail-thread" id="rail-thread">
+      <div class="rail-empty" id="rail-empty">
+        Ask anything about what you see. The <b>date range</b> and any <b>active filters</b> are already in the prompt box below.
+      </div>
+    </div>
+
+    <div class="rail-composer">
+      <div class="ask-suggest" id="rail-suggest">
+        <button data-q="Summarize this view in 3 bullets.">Summarize</button>
+        <button data-q="Who are the top 5 customers by sales here, and what share of the total do they hold?">Top customers</button>
+        <button data-q="Where is profit negative in this view, and what is driving it?">Negative profit</button>
+        <button data-q="Which state leads on sales, and how far ahead is it?">Leading state</button>
+      </div>
+      <div class="rail-prompt-wrap">
+        <textarea class="rail-prompt" id="rail-prompt" placeholder="In September there is a big increase in Sales and Order while Profit increase only a bit. what are the reasons for that?" spellcheck="false"></textarea>
+        <div class="rail-prompt-actions">
+          <span class="rail-hint">Ctrl+Enter</span>
+          <button class="rail-reset" id="rail-reset" title="Reset the prompt to just the current context">Reset</button>
+          <button class="ask-btn rail-send" id="rail-send">Ask <svg viewBox="0 0 16 16" fill="none"><path d="M2 8h11M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+</div><!-- /.page -->
+
+<script src="dashboard_data.js"></script>
+<script src="us-states-topojson-data.js"></script>
+<script>
+Chart.register(ChartDataLabels);
+
+/* ── static reference data (not derived from the .xls) ─────────────────────── */
+const STATE_NAME = {
+  AL:'Alabama',AK:'Alaska',AZ:'Arizona',AR:'Arkansas',CA:'California',CO:'Colorado',
+  CT:'Connecticut',DE:'Delaware',DC:'District of Columbia',FL:'Florida',GA:'Georgia',
+  HI:'Hawaii',ID:'Idaho',IL:'Illinois',IN:'Indiana',IA:'Iowa',KS:'Kansas',KY:'Kentucky',
+  LA:'Louisiana',ME:'Maine',MD:'Maryland',MA:'Massachusetts',MI:'Michigan',MN:'Minnesota',
+  MS:'Mississippi',MO:'Missouri',MT:'Montana',NE:'Nebraska',NV:'Nevada',NH:'New Hampshire',
+  NJ:'New Jersey',NM:'New Mexico',NY:'New York',NC:'North Carolina',ND:'North Dakota',
+  OH:'Ohio',OK:'Oklahoma',OR:'Oregon',PA:'Pennsylvania',RI:'Rhode Island',SC:'South Carolina',
+  SD:'South Dakota',TN:'Tennessee',TX:'Texas',UT:'Utah',VT:'Vermont',VA:'Virginia',
+  WA:'Washington',WV:'West Virginia',WI:'Wisconsin',WY:'Wyoming',
+};
+const NAME_TO_ABBR = Object.fromEntries(Object.entries(STATE_NAME).map(([abbr, name]) => [name, abbr]));
+
+/* ── real US state geometry (topojson, inlined via US_TOPOJSON — no runtime fetch, so
+   it works identically over file://, a bare static server, or a sandboxed preview; a
+   fetch() here previously left the map silently blank whenever this page was opened
+   directly as a local file, since browsers block fetch() from file:// origins) ── */
+const US_NATION_FEATURE = ChartGeo.topojson.feature(US_TOPOJSON, US_TOPOJSON.objects.nation).features[0];
+const US_STATES_FEATURES = ChartGeo.topojson.feature(US_TOPOJSON, US_TOPOJSON.objects.states).features;
+
+/* ── tiny DOM/util helpers ───────────────────────────────────────────────── */
+function escHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+const CHEVRON = '<svg class="dd-chevron" viewBox="0 0 16 16" fill="none" width="16" height="16"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const CLEAR_X = '<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg>';
+const MS_CB = '<span class="ms-cb"><svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1.5,5 4,7.5 8.5,2"/></svg></span>';
+const SEARCH_SVG = '<svg class="dd-search-icon" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="4" stroke="#bababa" stroke-width="1.5"/><line x1="9.5" y1="9.5" x2="13" y2="13" stroke="#bababa" stroke-width="1.5" stroke-linecap="round"/></svg>';
+
+const _openables = []; // { panelEl, btnEl }
+function closeAllDropdowns() {
+  _openables.forEach(({ panelEl, btnEl }) => { panelEl.classList.remove('open'); btnEl.classList.remove('open'); });
+}
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.dd-wrap') && !e.target.closest('#dp-wrap')) closeAllDropdowns();
+});
+
+/* ── vendored multi-select dropdown (mirrors the reports-playground filter-bar look) ── */
+function createMultiSelect({ mountId, label, items }) {
+  const mount = document.getElementById(mountId);
+  const wrap = document.createElement('div'); wrap.className = 'dd-wrap';
+  const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'dd-btn filter-dd';
+  btn.innerHTML = `<span class="dd-label">${label}</span><span class="dd-clear" title="Clear">${CLEAR_X}</span>${CHEVRON}`;
+  const panel = document.createElement('div'); panel.className = 'dd-panel';
+  wrap.appendChild(btn); wrap.appendChild(panel);
+  mount.appendChild(wrap);
+
+  // items: string[] or {value,label}[] — value is what's stored/filtered on, label is what's shown/searched
+  const norm = items.map(it => (it && typeof it === 'object') ? it : { value: it, label: it });
+  const labelOf = (v) => { const m = norm.find(n => n.value === v); return m ? m.label : v; };
+
+  let selected = [];
+  const hasSearch = norm.length > 10;
+
+  function updateLabel() {
+    const lbl = btn.querySelector('.dd-label');
+    if (!selected.length) { lbl.textContent = label; btn.classList.remove('has-value'); }
+    else if (selected.length === 1) { lbl.textContent = labelOf(selected[0]); btn.classList.add('has-value'); }
+    else { lbl.textContent = selected.length + ' selected'; btn.classList.add('has-value'); }
+  }
+
+  function renderPanel(filterText) {
+    panel.innerHTML = '';
+    let input = null;
+    if (hasSearch) {
+      const searchRow = document.createElement('div'); searchRow.className = 'dd-search-row';
+      searchRow.innerHTML = SEARCH_SVG + '<input class="dd-search-input" type="text" placeholder="Search">';
+      panel.appendChild(searchRow);
+      input = searchRow.querySelector('input');
+      input.value = filterText || '';
+      input.addEventListener('input', () => { renderPanel(input.value); });
+    }
+    const scroll = document.createElement('div'); scroll.className = 'dd-items-scroll';
+    const allDiv = document.createElement('div'); allDiv.className = 'dd-item' + (selected.length === 0 ? ' selected' : '');
+    allDiv.innerHTML = MS_CB + 'All';
+    allDiv.addEventListener('click', () => { selected = []; renderPanel(input ? input.value : ''); updateLabel(); onAnyFilterChange(); });
+    scroll.appendChild(allDiv);
+    const divider = document.createElement('div'); divider.className = 'dd-divider'; scroll.appendChild(divider);
+    const q = (filterText || '').toLowerCase();
+    norm.filter(it => !q || it.label.toLowerCase().includes(q)).forEach(it => {
+      const d = document.createElement('div'); d.className = 'dd-item' + (selected.includes(it.value) ? ' selected' : '');
+      d.innerHTML = MS_CB + escHtml(it.label);
+      d.addEventListener('click', () => {
+        const idx = selected.indexOf(it.value);
+        if (idx === -1) selected.push(it.value); else selected.splice(idx, 1);
+        d.classList.toggle('selected');
+        allDiv.classList.toggle('selected', selected.length === 0);
+        updateLabel();
+        onAnyFilterChange();
+      });
+      scroll.appendChild(d);
+    });
+    panel.appendChild(scroll);
+    if (input) input.focus();
+  }
+
+  btn.addEventListener('click', (e) => {
+    if (e.target.closest('.dd-clear')) {
+      e.stopPropagation();
+      selected = []; renderPanel(); updateLabel(); onAnyFilterChange();
+      return;
+    }
+    const isOpen = panel.classList.contains('open');
+    closeAllDropdowns();
+    if (!isOpen) { panel.classList.add('open'); btn.classList.add('open'); renderPanel(); }
+  });
+
+  _openables.push({ panelEl: panel, btnEl: btn });
+  return {
+    getSelected: () => selected.slice(),
+    clear: () => { selected = []; renderPanel(); updateLabel(); },
+  };
+}
+
+/* ── vendored date picker — shortcuts anchored to the caller's maxDate (the effective "today") ── */
+function createDatePicker({ mountId, minDate, maxDate, onApply }) {
+  const mount = document.getElementById(mountId);
+  const pad = n => String(n).padStart(2, '0');
+  const fmt = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const todayStr = maxDate; // anchor "future" off the real "today" the caller passed in
+
+  const _from7 = new Date(maxDate + 'T00:00:00'); _from7.setDate(_from7.getDate() - 6);
+  let dpFrom = fmt(_from7), dpTo = maxDate, dpPhase = 'from', dpHover = null; // default: last 7 days
+  let anchor = new Date(maxDate + 'T00:00:00');
+  let dpViewY = anchor.getFullYear(), dpViewM = anchor.getMonth();
+
+  const wrap = document.createElement('div'); wrap.id = 'dp-wrap';
+  wrap.innerHTML =
+    '<button id="dp-trigger"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg><span id="dp-label">–</span></button>' +
+    '<div id="dp-panel"><div class="dp-shortcuts">' +
+      '<div class="dp-shortcut" data-days="0">Today</div>' +
+      '<div class="dp-shortcut" data-days="1">Yesterday</div>' +
+      '<div class="dp-shortcut active" data-days="7">Last 7 days</div>' +
+      '<div class="dp-shortcut" data-days="30">Last 30 days</div>' +
+      '<div class="dp-shortcut" data-days="month">This month</div>' +
+      '<div class="dp-shortcut" data-days="year">This year</div>' +
+      '<div class="dp-shortcut" data-days="custom">All data</div>' +
+    '</div><div class="dp-cal">' +
+      '<div class="dp-nav"><button class="dp-nav-btn" id="dp-prev-btn"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.41 16.09l-4.58-4.59 4.58-4.59L14 5.5l-6 6 6 6z"/></svg></button>' +
+      '<span class="dp-month-label" id="dp-month-label"></span>' +
+      '<button class="dp-nav-btn" id="dp-next-btn"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.34l4.58-4.59-4.58-4.59L10 5.75l6 6-6 6z"/></svg></button></div>' +
+      '<div class="dp-grid" id="dp-weekdays"></div><div class="dp-grid" id="dp-grid"></div>' +
+      '<div class="dp-apply-row"><button class="dp-apply-btn" id="dp-apply-btn" disabled>Apply</button></div>' +
+    '</div></div>';
+  mount.appendChild(wrap);
+
+  const trigger = wrap.querySelector('#dp-trigger');
+  const panel = wrap.querySelector('#dp-panel');
+  const wdGrid = wrap.querySelector('#dp-weekdays');
+  ['Su','Mo','Tu','We','Th','Fr','Sa'].forEach(d => {
+    const cell = document.createElement('div'); cell.className = 'dp-weekday'; cell.textContent = d; wdGrid.appendChild(cell);
+  });
+
+  function buildCal() {
+    const grid = wrap.querySelector('#dp-grid');
+    const lbl = wrap.querySelector('#dp-month-label');
+    const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    lbl.textContent = months[dpViewM] + ' ' + dpViewY;
+    grid.innerHTML = '';
+    const lo = dpPhase === 'to' && dpHover && dpHover < dpFrom ? dpHover : dpFrom;
+    const hi = dpPhase === 'to' && dpHover ? (dpHover > dpFrom ? dpHover : dpFrom) : dpTo;
+    const firstDay = new Date(dpViewY, dpViewM, 1);
+    const startSlot = firstDay.getDay();
+    const daysInMonth = new Date(dpViewY, dpViewM + 1, 0).getDate();
+    const prevMonthDays = new Date(dpViewY, dpViewM, 0).getDate();
+    for (let i = startSlot - 1; i >= 0; i--) {
+      const cell = document.createElement('div'); cell.className = 'dp-cell';
+      const b = document.createElement('button'); b.className = 'dp-day other-month'; b.textContent = prevMonthDays - i; b.disabled = true;
+      cell.appendChild(b); grid.appendChild(cell);
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = `${dpViewY}-${pad(dpViewM + 1)}-${pad(d)}`;
+      const cell = document.createElement('div'); cell.className = 'dp-cell';
+      const b = document.createElement('button'); b.className = 'dp-day'; b.textContent = d; b.dataset.date = dateStr;
+      if (dateStr > todayStr || dateStr < minDate) { b.classList.add('disabled'); b.disabled = true; }
+      else {
+        if (dateStr === lo && dateStr === hi) b.classList.add('selected');
+        else if (dateStr === lo) { cell.classList.add('range-start'); b.classList.add('range-dot'); }
+        else if (dateStr === hi) { cell.classList.add('range-end'); b.classList.add('range-dot'); }
+        else if (dateStr > lo && dateStr < hi) cell.classList.add('in-range');
+      }
+      cell.appendChild(b); grid.appendChild(cell);
+    }
+    const totalSlots = startSlot + daysInMonth;
+    const remaining = totalSlots % 7 === 0 ? 0 : 7 - (totalSlots % 7);
+    const nY = dpViewM === 11 ? dpViewY + 1 : dpViewY, nM = dpViewM === 11 ? 0 : dpViewM + 1;
+    for (let d = 1; d <= remaining; d++) {
+      const dateStr = `${nY}-${pad(nM + 1)}-${pad(d)}`;
+      const cell = document.createElement('div'); cell.className = 'dp-cell';
+      const b = document.createElement('button'); b.className = 'dp-day other-month';
+      if (dateStr > todayStr || dateStr < minDate) b.classList.add('disabled');
+      b.textContent = d; b.disabled = true;
+      cell.appendChild(b); grid.appendChild(cell);
+    }
+  }
+  function renderLabel() { wrap.querySelector('#dp-label').textContent = dpFrom + ' → ' + dpTo; }
+  function markCustom() {
+    wrap.querySelectorAll('.dp-shortcut').forEach(x => x.classList.remove('active'));
+    wrap.querySelector('.dp-shortcut[data-days="custom"]').classList.add('active');
+  }
+
+  let _committedFrom = dpFrom, _committedTo = dpTo, _committedShortcut = '7', _applyFired = false;
+  const applyBtn = wrap.querySelector('#dp-apply-btn');
+
+  function activeShortcut() { const el = wrap.querySelector('.dp-shortcut.active'); return el ? el.dataset.days : null; }
+  function selectionChanged() {
+    const sc = activeShortcut();
+    if (sc && sc !== 'custom') return sc !== _committedShortcut;
+    return dpFrom !== _committedFrom || dpTo !== _committedTo;
+  }
+  function refreshApplyBtn() { applyBtn.disabled = !selectionChanged(); }
+  function restoreShortcut() {
+    wrap.querySelectorAll('.dp-shortcut').forEach(x => x.classList.remove('active'));
+    const el = wrap.querySelector(`.dp-shortcut[data-days="${_committedShortcut}"]`);
+    if (el) el.classList.add('active');
+  }
+
+  wrap.querySelectorAll('.dp-shortcut').forEach(sc => {
+    sc.onclick = (e) => {
+      e.stopPropagation();
+      const days = sc.dataset.days;
+      const t = new Date(todayStr + 'T00:00:00');
+      wrap.querySelectorAll('.dp-shortcut').forEach(x => x.classList.remove('active'));
+      sc.classList.add('active');
+      if (days === 'custom') { dpFrom = minDate; dpTo = maxDate; }
+      else if (days === '0') { dpFrom = dpTo = fmt(t); }
+      else if (days === '1') { const y = new Date(t); y.setDate(t.getDate() - 1); dpFrom = dpTo = fmt(y); }
+      else if (days === 'month') { dpFrom = `${t.getFullYear()}-${pad(t.getMonth() + 1)}-01`; dpTo = fmt(t); }
+      else if (days === 'year') { dpFrom = `${t.getFullYear()}-01-01`; dpTo = fmt(t); }
+      else { const s = new Date(t); s.setDate(t.getDate() - (parseInt(days) - 1)); dpFrom = fmt(s); dpTo = fmt(t); }
+      if (dpFrom < minDate) dpFrom = minDate;
+      dpPhase = 'from'; dpHover = null;
+      const d = new Date(dpTo + 'T00:00:00'); dpViewY = d.getFullYear(); dpViewM = d.getMonth();
+      buildCal(); renderLabel(); refreshApplyBtn();
+    };
+  });
+
+  const grid = wrap.querySelector('#dp-grid');
+  grid.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const b = e.target.closest('.dp-day');
+    if (!b || b.classList.contains('other-month') || !b.dataset.date) return;
+    const date = b.dataset.date;
+    if (dpPhase === 'from') { dpFrom = date; dpTo = date; dpPhase = 'to'; dpHover = null; markCustom(); buildCal(); }
+    else {
+      if (date < dpFrom) { dpTo = dpFrom; dpFrom = date; } else { dpTo = date; }
+      dpPhase = 'from'; dpHover = null; markCustom(); buildCal(); renderLabel(); refreshApplyBtn();
+    }
+  });
+  grid.addEventListener('mouseover', (e) => {
+    const b = e.target.closest('.dp-day');
+    if (!b || b.classList.contains('other-month') || !b.dataset.date || dpHover === b.dataset.date) return;
+    dpHover = b.dataset.date;
+    if (dpPhase === 'to') buildCal();
+  });
+  grid.addEventListener('mouseleave', () => { if (dpPhase === 'to' && dpHover) { dpHover = null; buildCal(); } });
+
+  wrap.querySelector('#dp-prev-btn').onclick = () => { dpViewM--; if (dpViewM < 0) { dpViewM = 11; dpViewY--; } buildCal(); };
+  wrap.querySelector('#dp-next-btn').onclick = () => {
+    const maxD = new Date(todayStr + 'T00:00:00');
+    if (dpViewY > maxD.getFullYear() || (dpViewY === maxD.getFullYear() && dpViewM >= maxD.getMonth())) return;
+    dpViewM++; if (dpViewM > 11) { dpViewM = 0; dpViewY++; } buildCal();
+  };
+
+  applyBtn.onclick = (e) => {
+    e.stopPropagation();
+    _applyFired = true; _committedFrom = dpFrom; _committedTo = dpTo; _committedShortcut = activeShortcut() || 'custom';
+    applyBtn.disabled = true;
+    if (onApply) onApply(dpFrom, dpTo);
+    panel.classList.remove('open'); trigger.classList.remove('open');
+  };
+
+  new MutationObserver(() => {
+    if (!panel.classList.contains('open')) {
+      if (!_applyFired) { dpFrom = _committedFrom; dpTo = _committedTo; renderLabel(); restoreShortcut(); }
+      _applyFired = false; applyBtn.disabled = true;
+    }
+  }).observe(panel, { attributes: true, attributeFilter: ['class'] });
+
+  trigger.onclick = () => {
+    const isOpen = panel.classList.contains('open');
+    closeAllDropdowns();
+    if (!isOpen) {
+      dpPhase = 'from'; dpHover = null;
+      const d = new Date(dpTo + 'T00:00:00'); dpViewY = d.getFullYear(); dpViewM = d.getMonth();
+      panel.classList.add('open'); trigger.classList.add('open'); applyBtn.disabled = true; buildCal();
+    }
+  };
+
+  renderLabel();
+  _openables.push({ panelEl: panel, btnEl: trigger });
+  return {
+    getRange: () => ({ start: dpFrom, end: dpTo }),
+    // the APPLIED shortcut ('7', '30', 'month', 'year', 'custom', ...) — the agent rail
+    // uses it to phrase the date context the way the user picked it ("Last 7 days")
+    getCommittedShortcut: () => _committedShortcut,
+  };
+}
+
+/* ── "today" + ignoring future rows ─────────────────────────────────────────
+   The sample data runs through 2026-12-30, but rows after the real today are
+   business that hasn't happened yet — a live dashboard can't show it, so it's
+   dropped entirely (not just hidden behind the date picker's disabled days). ── */
+function fmtDate(d) { const pad = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+const REAL_TODAY = fmtDate(new Date());
+const EFFECTIVE_MAX_DATE = REAL_TODAY < DATA_MAX_DATE ? REAL_TODAY : DATA_MAX_DATE;
+const ALL_ROWS = DASH_ROWS.filter(r => r.d <= EFFECTIVE_MAX_DATE);
+
+const _last7From = new Date(EFFECTIVE_MAX_DATE + 'T00:00:00'); _last7From.setDate(_last7From.getDate() - 6);
+const DEFAULT_START = fmtDate(_last7From) < DATA_MIN_DATE ? DATA_MIN_DATE : fmtDate(_last7From);
+
+/* ── global filter state ─────────────────────────────────────────────────── */
+const filterState = { start: DEFAULT_START, end: EFFECTIVE_MAX_DATE, state: [], segment: [], manufacturer: [], category: [], subcat: [], customer: [] };
+
+const SEGMENTS = ['Consumer', 'Corporate', 'Home Office'];
+const CATEGORIES = ['Furniture', 'Office Supplies', 'Technology'];
+const SUBCATS = Array.from(new Set(ALL_ROWS.map(r => r.sc))).sort();
+const MANUFACTURERS = Array.from(new Set(ALL_ROWS.map(r => r.mf))).sort();
+const CUSTOMERS = Array.from(new Set(ALL_ROWS.map(r => r.cu))).sort();
+const STATE_ITEMS = Object.entries(STATE_NAME)
+  .map(([abbr, name]) => ({ value: abbr, label: `${name} (${abbr})` }))
+  .sort((a, b) => a.label.localeCompare(b.label));
+
+let metric = 'sales'; // 'sales' | 'profit' | 'orders'
+const charts = {};
+
+function onAnyFilterChange() { applyBtn.disabled = false; updateClearVisibility(); }
+
+/* filters ordered left-to-right the same way the 6 charts read: State, Segment,
+   Manufacturers, Category, Sub-Category, Customers — date picker leads the row. */
+const dp = createDatePicker({
+  mountId: 'filter-bar', minDate: DATA_MIN_DATE, maxDate: EFFECTIVE_MAX_DATE,
+  onApply: (start, end) => { filterState.start = start; filterState.end = end; renderAll(); },
+});
+const msState = createMultiSelect({ mountId: 'filter-bar', label: 'State', items: STATE_ITEMS });
+const msSegment = createMultiSelect({ mountId: 'filter-bar', label: 'Segment', items: SEGMENTS });
+const msManufacturer = createMultiSelect({ mountId: 'filter-bar', label: 'Manufacturer', items: MANUFACTURERS });
+const msCategory = createMultiSelect({ mountId: 'filter-bar', label: 'Category', items: CATEGORIES });
+const msSubcat = createMultiSelect({ mountId: 'filter-bar', label: 'Sub-Category', items: SUBCATS });
+const msCustomer = createMultiSelect({ mountId: 'filter-bar', label: 'Customer', items: CUSTOMERS });
+
+const applyBtn = document.createElement('button');
+applyBtn.className = 'filter-apply-btn'; applyBtn.textContent = 'Apply'; applyBtn.disabled = true;
+const clearBtn = document.createElement('button');
+clearBtn.className = 'filter-clear-btn'; clearBtn.textContent = 'Clear filters'; clearBtn.style.display = 'none';
+document.getElementById('filter-bar').appendChild(applyBtn);
+document.getElementById('filter-bar').appendChild(clearBtn);
+
+function updateClearVisibility() {
+  const hasAny = msState.getSelected().length || msSegment.getSelected().length || msManufacturer.getSelected().length
+    || msCategory.getSelected().length || msSubcat.getSelected().length || msCustomer.getSelected().length;
+  clearBtn.style.display = hasAny ? '' : 'none';
+}
+applyBtn.addEventListener('click', () => {
+  filterState.state = msState.getSelected();
+  filterState.segment = msSegment.getSelected();
+  filterState.manufacturer = msManufacturer.getSelected();
+  filterState.customer = msCustomer.getSelected();
+  filterState.category = msCategory.getSelected();
+  filterState.subcat = msSubcat.getSelected();
+  applyBtn.disabled = true;
+  updateClearVisibility();
+  renderAll();
+});
+clearBtn.addEventListener('click', () => {
+  msState.clear(); msSegment.clear(); msManufacturer.clear(); msCategory.clear(); msSubcat.clear(); msCustomer.clear();
+  filterState.state = []; filterState.segment = []; filterState.manufacturer = [];
+  filterState.category = []; filterState.subcat = []; filterState.customer = [];
+  applyBtn.disabled = true;
+  updateClearVisibility();
+  renderAll();
+});
+
+/* ── data filtering + formatting ─────────────────────────────────────────── */
+function filteredRows() {
+  return ALL_ROWS.filter(r =>
+    r.d >= filterState.start && r.d <= filterState.end &&
+    (!filterState.state.length || filterState.state.includes(r.st)) &&
+    (!filterState.segment.length || filterState.segment.includes(r.sg)) &&
+    (!filterState.manufacturer.length || filterState.manufacturer.includes(r.mf)) &&
+    (!filterState.category.length || filterState.category.includes(r.ct)) &&
+    (!filterState.subcat.length || filterState.subcat.includes(r.sc)) &&
+    (!filterState.customer.length || filterState.customer.includes(r.cu))
+  );
+}
+function fmtCompact(v, isCount) {
+  const sign = v < 0 ? '-' : '';
+  const abs = Math.abs(v);
+  if (isCount) return sign + Math.round(abs).toLocaleString();
+  if (abs >= 1000) return sign + '$' + (abs / 1000).toFixed(1) + 'K';
+  return sign + '$' + abs.toFixed(0);
+}
+function fmtFull(v, isCount) {
+  const sign = v < 0 ? '-' : '';
+  const abs = Math.abs(v);
+  return isCount ? sign + Math.round(abs).toLocaleString() : sign + '$' + Math.round(abs).toLocaleString();
+}
+function calcTotals(rows) {
+  let sales = 0, profit = 0;
+  const orderSet = new Set(), custSet = new Set();
+  for (const r of rows) { sales += r.s; profit += r.p; orderSet.add(r.oid); custSet.add(r.cu); }
+  return { sales, profit, orders: orderSet.size, customers: custSet.size };
+}
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+/* ── over-time bucketing (day / week / month / quarter / year, computed on the fly) ── */
+function bucketKey(dateStr, gran) {
+  if (gran === 'day') return dateStr;
+  if (gran === 'week') {
+    const d = new Date(dateStr + 'T00:00:00');
+    const day = d.getDay();
+    d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day)); // Monday of that week
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+  if (gran === 'month') return dateStr.slice(0, 7);
+  if (gran === 'quarter') {
+    const [y, m] = dateStr.split('-');
+    return `${y}-Q${Math.ceil(parseInt(m, 10) / 3)}`;
+  }
+  return dateStr.slice(0, 4); // year
+}
+function fmtBucketLabel(key, gran) {
+  if (gran === 'day') {
+    const d = new Date(key + 'T00:00:00');
+    return MONTH_NAMES[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+  }
+  if (gran === 'week') {
+    const d = new Date(key + 'T00:00:00');
+    return 'Week of ' + MONTH_NAMES[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+  }
+  if (gran === 'month') { const [y, m] = key.split('-'); return MONTH_NAMES[parseInt(m, 10) - 1] + ' ' + y; }
+  if (gran === 'quarter') { const [y, q] = key.split('-'); return q + ' ' + y; }
+  return key; // year
+}
+function overtimeSeries(rows, gran) {
+  const buckets = new Map(); // key -> {sales,profit,orders:Set}
+  for (const r of rows) {
+    const k = bucketKey(r.d, gran);
+    if (!buckets.has(k)) buckets.set(k, { sales: 0, profit: 0, orders: new Set() });
+    const b = buckets.get(k);
+    b.sales += r.s; b.profit += r.p; b.orders.add(r.oid);
+  }
+  const keys = Array.from(buckets.keys()).sort();
+  return {
+    labels: keys,
+    sales: keys.map(k => buckets.get(k).sales),
+    profit: keys.map(k => buckets.get(k).profit),
+    orders: keys.map(k => buckets.get(k).orders.size),
+  };
+}
+function aggregate(rows, dimKey) {
+  const m = new Map();
+  for (const r of rows) {
+    const k = r[dimKey];
+    if (k === null || k === undefined || k === '') continue;
+    if (!m.has(k)) m.set(k, { sales: 0, profit: 0, orders: new Set() });
+    const o = m.get(k);
+    o.sales += r.s; o.profit += r.p; o.orders.add(r.oid);
+  }
+  return m;
+}
+function metricValue(o) { return metric === 'orders' ? o.orders.size : o[metric]; }
+
+const GROUP_DIM = { map: 'st', segment: 'sg', mfg: 'mf', category: 'ct', subcat: 'sc', customers: 'cu' };
+const TOP_N = { mfg: 10, subcat: 10, customers: 10 };
+function buildCardData(cardId, rows) {
+  const m = aggregate(rows, GROUP_DIM[cardId]);
+  let entries = Array.from(m.entries()).map(([label, o]) => ({ label, val: metricValue(o) }));
+  entries.sort((a, b) => Math.abs(b.val) - Math.abs(a.val));
+  if (TOP_N[cardId]) entries = entries.slice(0, TOP_N[cardId]);
+  return entries;
+}
+
+/* ── KPI + sparklines ────────────────────────────────────────────────────── */
+function setKpi(key, val, isCount) {
+  const el = document.getElementById('kpi-' + key + '-value');
+  el.textContent = fmtFull(val, isCount);
+  el.className = 'metric-value' + (val < 0 ? ' negative' : '');
+}
+let granularity = 'day'; // 'day' | 'week' | 'month' | 'quarter' | 'year'
+const METRIC_COLOR = { sales: '#5B8DF8', profit: '#e5ff00', orders: '#2DD4BF' };
+
+function renderOvertime(rows) {
+  const s = overtimeSeries(rows, granularity);
+  const dataArr = s[metric];
+  const color = METRIC_COLOR[metric];
+  if (charts['overtime']) charts['overtime'].destroy();
+  charts['overtime'] = new Chart(document.getElementById('chart-overtime'), {
+    type: 'line',
+    data: {
+      labels: s.labels,
+      datasets: [{
+        data: dataArr, borderColor: color, backgroundColor: 'transparent', borderWidth: 2,
+        pointRadius: 2.5, pointHoverRadius: 5, pointBackgroundColor: color, pointBorderColor: color, tension: 0.3,
+      }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false }, datalabels: { display: false },
+        tooltip: {
+          enabled: true, displayColors: false,
+          callbacks: {
+            title: (items) => fmtBucketLabel(s.labels[items[0].dataIndex], granularity),
+            label: (item) => fmtCompact(item.parsed.y, metric === 'orders'),
+          },
+        },
+      },
+      scales: {
+        x: { ticks: { color: '#8e8e8e', font: { family: 'Inter', size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 10 }, grid: { display: false } },
+        y: { ticks: { color: '#8e8e8e', font: { family: 'Inter', size: 10 }, callback: (v) => fmtCompact(v, metric === 'orders') }, grid: { color: '#282828' } },
+      },
+    },
+  });
+}
+
+/* ── chart cards ─────────────────────────────────────────────────────────── */
+function renderChartCard(cardId, canvasId, horizontal, rows) {
+  const data = buildCardData(cardId, rows);
+  if (charts[cardId]) charts[cardId].destroy();
+  const colors = data.map(d => (metric === 'profit' && d.val < 0) ? 'rgba(255,49,49,0.65)' : 'rgba(91,141,248,0.65)');
+  charts[cardId] = new Chart(document.getElementById(canvasId), {
+    type: 'bar',
+    data: { labels: data.map(d => d.label), datasets: [{ data: data.map(d => d.val), backgroundColor: colors, borderRadius: 4, maxBarThickness: horizontal ? 20 : 60 }] },
+    options: {
+      indexAxis: horizontal ? 'y' : 'x',
+      responsive: true, maintainAspectRatio: false,
+      layout: { padding: horizontal ? { right: 46 } : { top: 26 } },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (c) => fmtCompact(c.parsed[horizontal ? 'x' : 'y'], metric === 'orders') } },
+        datalabels: {
+          anchor: 'end', align: 'end', offset: horizontal ? 6 : 6,
+          color: '#f0f0f0', font: { family: 'Inter', size: horizontal ? 11 : 12, weight: '700' },
+          formatter: (v) => fmtCompact(v, metric === 'orders'),
+        },
+      },
+      scales: horizontal ? {
+        x: { ticks: { color: '#8e8e8e', font: { family: 'Inter', size: 10 }, callback: (v) => fmtCompact(v, metric === 'orders') }, grid: { color: '#282828' } },
+        y: { ticks: { color: '#bababa', font: { family: 'Inter', size: 11 } }, grid: { display: false } },
+      } : {
+        x: { ticks: { color: '#bababa', font: { family: 'Inter', size: 11 } }, grid: { display: false } },
+        y: { display: false, grid: { display: false } },
+      },
+    },
+  });
+}
+
+/* ── real US-state choropleth map (chartjs-chart-geo + us-atlas topojson) ── */
+function renderMap(rows) {
+  const data = buildCardData('map', rows);
+  const byState = new Map(data.map(d => [d.label, d.val]));
+  const maxAbs = Math.max(1, ...data.map(d => Math.abs(d.val)));
+  const isProfit = metric === 'profit';
+  const points = US_STATES_FEATURES.map(feature => {
+    const abbr = NAME_TO_ABBR[feature.properties.name];
+    const value = abbr && byState.has(abbr) ? byState.get(abbr) : null;
+    return { feature, value };
+  });
+  if (charts['map']) charts['map'].destroy();
+  charts['map'] = new Chart(document.getElementById('chart-map'), {
+    type: 'choropleth',
+    data: {
+      labels: points.map(p => p.feature.properties.name),
+      datasets: [{
+        label: 'States',
+        outline: US_NATION_FEATURE,
+        showOutline: true,
+        backgroundColor: (ctx) => {
+          if (!ctx.dataset || ctx.dataIndex === undefined) return 'var(--nested)';
+          const v = ctx.dataset.data[ctx.dataIndex] && ctx.dataset.data[ctx.dataIndex].value;
+          if (v === null || v === undefined) return 'rgba(64,64,64,0.35)';
+          const intensity = 0.18 + 0.72 * (Math.abs(v) / maxAbs);
+          return (isProfit && v < 0) ? `rgba(255,49,49,${intensity.toFixed(2)})` : `rgba(91,141,248,${intensity.toFixed(2)})`;
+        },
+        borderColor: '#404040', borderWidth: 0.5,
+        data: points,
+      }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      showOutline: true, showGraticule: false,
+      plugins: {
+        legend: { display: false }, datalabels: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => items[0].raw.feature.properties.name,
+            label: (item) => {
+              const v = item.raw.value;
+              return (v === null || v === undefined) ? 'no data in range' : fmtCompact(v, metric === 'orders');
+            },
+          },
+        },
+      },
+      scales: {
+        projection: { axis: 'x', projection: 'albersUsa' },
+        color: { axis: 'x', display: false },
+      },
+    },
+  });
+}
+
+/* ── titles + full render ────────────────────────────────────────────────── */
+const GRAN_LABEL = { day: 'Day', week: 'Week', month: 'Month', quarter: 'Quarter', year: 'Year' };
+function updateTitles() {
+  const label = { sales: 'Sales', profit: 'Profit', orders: 'Orders' }[metric];
+  document.getElementById('title-overtime').textContent = label + ' | By ' + GRAN_LABEL[granularity];
+  document.getElementById('title-map').textContent = label + ' | By State';
+  document.getElementById('title-segment').textContent = label + ' | By Segment';
+  document.getElementById('title-mfg').textContent = label + ' | By Top 10 Manufacturers';
+  document.getElementById('title-category').textContent = label + ' | By Category';
+  document.getElementById('title-subcat').textContent = label + ' | By Sub-Category (Top 10)';
+  document.getElementById('title-customers').textContent = label + ' | By Top 10 Customers';
+}
+function renderAll() {
+  const rows = filteredRows();
+  updateTitles();
+
+  const totals = calcTotals(rows);
+  setKpi('sales', totals.sales, false);
+  setKpi('profit', totals.profit, false);
+  setKpi('orders', totals.orders, true);
+  setKpi('customers', totals.customers, true);
+
+  renderOvertime(rows);
+  renderMap(rows);
+  renderChartCard('segment', 'chart-segment', false, rows);
+  renderChartCard('mfg', 'chart-mfg', true, rows);
+  renderChartCard('category', 'chart-category', false, rows);
+  renderChartCard('subcat', 'chart-subcat', true, rows);
+  renderChartCard('customers', 'chart-customers', true, rows);
+
+  // the agent rail mirrors whatever the charts now show (applied state only, never
+  // half-picked dropdown selections that have not hit Apply yet)
+  if (typeof syncAgentContext === 'function') syncAgentContext();
+}
+
+/* ── events ──────────────────────────────────────────────────────────────── */
+document.getElementById('metric-toggle').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-metric]');
+  if (!btn) return;
+  metric = btn.dataset.metric;
+  document.querySelectorAll('#metric-toggle button').forEach(b => b.classList.toggle('active', b === btn));
+  renderAll();
+});
+document.getElementById('gran-toggle').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-gran]');
+  if (!btn) return;
+  granularity = btn.dataset.gran;
+  document.querySelectorAll('#gran-toggle button').forEach(b => b.classList.toggle('active', b === btn));
+  document.getElementById('title-overtime').textContent = { sales: 'Sales', profit: 'Profit', orders: 'Orders' }[metric] + ' | By ' + GRAN_LABEL[granularity];
+  renderOvertime(filteredRows());
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   AGENT RAIL
+   The prompt box carries a CONTEXT BLOCK (what the dashboard currently shows)
+   followed by the user's own question. Only applied state counts, and only the
+   filters that actually narrow the data: a dropdown left on "All" is not context,
+   and the "All data" date shortcut is not context either — an agent told
+   "no filters, all dates" learns nothing, so we say nothing.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+// Optional real backend. Set it (e.g. from the console or an inline script) to a URL that
+// accepts POST {prompt, context} and returns {answer} (or plain text). Left null, the rail
+// answers from a local grounded mock computed on the filtered rows — fully offline.
+const AGENT_ENDPOINT = null;
+
+const SIDEKICK_ICON = '<svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M12 2l2.2 6.8L21 11l-6.8 2.2L12 20l-2.2-6.8L3 11l6.8-2.2L12 2z" fill="currentColor"/></svg>';
+// Pre-seeded for the demo: the question is already sitting in the box on load, so the
+// only action needed on stage is clicking Ask — nothing to type live.
+const DEFAULT_QUESTION = 'In September there is a big increase in Sales and Order while Profit increase only a bit. what are the reasons for that?';
+const CONTEXT_HEAD = 'Context (current dashboard view):';
+const QUESTION_HEAD = 'Question:';
+const FILTER_LABEL = { state: 'State', segment: 'Segment', manufacturer: 'Manufacturer', category: 'Category', subcat: 'Sub-Category', customer: 'Customer' };
+const FILTER_ORDER = ['state', 'segment', 'manufacturer', 'category', 'subcat', 'customer'];
+const SHORTCUT_LABEL = { '0': 'Today', '1': 'Yesterday', '7': 'Last 7 days', '30': 'Last 30 days', 'month': 'This month', 'year': 'This year' };
+
+function fmtHuman(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  return MONTH_NAMES[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+}
+function fmtRangeHuman(start, end) {
+  if (start === end) return fmtHuman(start);
+  const a = new Date(start + 'T00:00:00'), b = new Date(end + 'T00:00:00');
+  if (a.getFullYear() === b.getFullYear()) return MONTH_NAMES[a.getMonth()] + ' ' + a.getDate() + ' – ' + MONTH_NAMES[b.getMonth()] + ' ' + b.getDate() + ', ' + b.getFullYear();
+  return fmtHuman(start) + ' – ' + fmtHuman(end);
+}
+
+/* Build the context as structured items — each one becomes BOTH a chip and a line in the
+   prompt box, so what the user sees in the strip is byte-for-byte what travels. */
+function buildContextItems() {
+  const items = [];
+  const isAllData = filterState.start <= DATA_MIN_DATE && filterState.end >= EFFECTIVE_MAX_DATE;
+  if (!isAllData) {
+    const sc = dp.getCommittedShortcut();
+    const range = fmtRangeHuman(filterState.start, filterState.end);
+    const text = SHORTCUT_LABEL[sc] ? `${SHORTCUT_LABEL[sc]} (${range})` : range;
+    items.push({ key: 'Date range', value: text });
+  }
+  for (const k of FILTER_ORDER) {
+    const sel = filterState[k];
+    if (!sel || !sel.length) continue; // "All" = not a filter = not context
+    const shown = k === 'state' ? sel.map(ab => STATE_NAME[ab] || ab) : sel;
+    const value = shown.length <= 6 ? shown.join(', ') : shown.slice(0, 6).join(', ') + ` (+${shown.length - 6} more)`;
+    items.push({ key: FILTER_LABEL[k], value });
+  }
+  return items;
+}
+function contextBlockText(items) {
+  if (!items.length) return '';
+  return CONTEXT_HEAD + '\n' + items.map(it => `- ${it.key}: ${it.value}`).join('\n');
+}
+
+const promptEl = document.getElementById('rail-prompt');
+const chipsEl = document.getElementById('rail-chips');
+const syncEl = document.getElementById('rail-sync');
+const threadEl = document.getElementById('rail-thread');
+const emptyEl = document.getElementById('rail-empty');
+const sendBtn = document.getElementById('rail-send');
+
+let _lastContextBlock = null; // the context text we last injected, so we can swap it out cleanly
+let _lastContextItems = [];
+let _syncFlashTimer = null;
+
+/* Split the textarea into [contextBlock we injected, user's question]. If the user has
+   deleted or rewritten the context, we fall back to treating everything as the question. */
+function splitPrompt() {
+  const v = promptEl.value;
+  if (_lastContextBlock && v.startsWith(_lastContextBlock)) {
+    let rest = v.slice(_lastContextBlock.length).replace(/^\s*\n/, '');
+    if (rest.startsWith(QUESTION_HEAD)) rest = rest.slice(QUESTION_HEAD.length).replace(/^[ \t]*\n?/, '');
+    return { ctx: _lastContextBlock, question: rest };
+  }
+  return { ctx: null, question: v };
+}
+function composePrompt(ctxBlock, question) {
+  const q = question || '';
+  if (!ctxBlock) return q;
+  return ctxBlock + '\n\n' + QUESTION_HEAD + '\n' + q;
+}
+
+function renderChips(items) {
+  chipsEl.innerHTML = items.length
+    ? items.map(it => `<span class="ask-context-tag"><b>${escHtml(it.key)}</b>&nbsp;${escHtml(it.value)}</span>`).join('')
+    : '<span class="ask-context-tag empty">All data, no filters — nothing to narrow the question</span>';
+}
+
+function syncAgentContext() {
+  const items = buildContextItems();
+  const block = contextBlockText(items);
+  const { question } = splitPrompt();
+  const changed = block !== _lastContextBlock;
+  _lastContextBlock = block || null;
+  _lastContextItems = items;
+  const sel = { s: promptEl.selectionStart, e: promptEl.selectionEnd, atEnd: promptEl.selectionEnd === promptEl.value.length };
+  promptEl.value = composePrompt(_lastContextBlock, question);
+  if (document.activeElement === promptEl) {
+    const end = promptEl.value.length;
+    promptEl.setSelectionRange(end, end);
+  }
+  renderChips(items);
+  if (changed) {
+    syncEl.textContent = 'updated to match the view';
+    syncEl.classList.add('flash');
+    clearTimeout(_syncFlashTimer);
+    _syncFlashTimer = setTimeout(() => { syncEl.textContent = 'synced'; syncEl.classList.remove('flash'); }, 1800);
+  }
+}
+
+/* ── thread rendering ─────────────────────────────────────────────────────── */
+function addUserMsg(question, items) {
+  emptyEl.style.display = 'none';
+  const wrap = document.createElement('div'); wrap.className = 'chat-msg';
+  const ctxLine = items.length
+    ? `<div class="rail-ctx-line">${items.map(it => `<span>${escHtml(it.key)}: ${escHtml(it.value)}</span>`).join('')}</div>`
+    : '';
+  wrap.innerHTML = `<div class="chat-avatar user">You</div><div style="min-width:0;flex:1"><div class="chat-bubble question">${escHtml(question)}</div>${ctxLine}</div>`;
+  threadEl.appendChild(wrap);
+  threadEl.scrollTop = threadEl.scrollHeight;
+}
+function addAgentPending() {
+  const wrap = document.createElement('div'); wrap.className = 'chat-msg';
+  wrap.innerHTML = `<div class="chat-avatar agent">${SIDEKICK_ICON}</div><div class="chat-bubble grounded"><span class="typing"><i></i><i></i><i></i></span></div>`;
+  threadEl.appendChild(wrap);
+  threadEl.scrollTop = threadEl.scrollHeight;
+  return wrap.querySelector('.chat-bubble');
+}
+function renderAnswer(bubble, html) {
+  bubble.innerHTML = html;
+  threadEl.scrollTop = threadEl.scrollHeight;
+}
+
+/* ── the local grounded mock: answers computed from the SAME rows the charts use ── */
+const num = (v, isCount) => `<span class="${v < 0 ? 'neg' : 'num'}">${fmtFull(v, isCount)}</span>`;
+const pct = (part, whole) => whole ? (100 * part / whole).toFixed(1) + '%' : '–';
+function scopeSentence(items) {
+  if (!items.length) return 'across all data, no filters';
+  return 'for ' + items.map(it => `${it.key.toLowerCase()} ${it.value}`).join(', ');
+}
+function topList(rows, dimKey, metricKey, n, isCount) {
+  const m = aggregate(rows, dimKey);
+  const entries = Array.from(m.entries()).map(([label, o]) => ({ label, val: metricKey === 'orders' ? o.orders.size : o[metricKey] }));
+  entries.sort((a, b) => b.val - a.val);
+  return { top: entries.slice(0, n), all: entries };
+}
+
+/* ── month-over-month margin-gap analysis ("sales/orders jumped but profit barely moved") ──
+   This deliberately looks ACROSS MONTHS regardless of the date range currently selected
+   (that range picks a window to read charts in, not the scope of a trend question) — it
+   still respects any active dimension filters (category, customer, ...), the same way a
+   real agent would re-scope its own query rather than being limited to the chart viewport. */
+const MONTH_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+function dimFilteredRows() {
+  return ALL_ROWS.filter(r =>
+    (!filterState.state.length || filterState.state.includes(r.st)) &&
+    (!filterState.segment.length || filterState.segment.includes(r.sg)) &&
+    (!filterState.manufacturer.length || filterState.manufacturer.includes(r.mf)) &&
+    (!filterState.category.length || filterState.category.includes(r.ct)) &&
+    (!filterState.subcat.length || filterState.subcat.includes(r.sc)) &&
+    (!filterState.customer.length || filterState.customer.includes(r.cu))
+  );
+}
+function monthKey(y, m) { return `${y}-${String(m).padStart(2, '0')}`; }
+function analyzeMonthMarginGap(monthNum, monthLabel) {
+  const base = dimFilteredRows();
+  const years = Array.from(new Set(base.filter(r => parseInt(r.d.slice(5, 7), 10) === monthNum).map(r => parseInt(r.d.slice(0, 4), 10))));
+  if (!years.length) return null;
+  const year = Math.max(...years);
+  const targetRows = base.filter(r => r.d.slice(0, 7) === monthKey(year, monthNum));
+  if (!targetRows.length) return null;
+
+  const sales = targetRows.reduce((s, r) => s + r.s, 0);
+  const profit = targetRows.reduce((s, r) => s + r.p, 0);
+  const rowsCount = targetRows.length;
+  const avgOrder = sales / rowsCount;
+  const margin = sales ? 100 * profit / sales : 0;
+  const negRows = targetRows.filter(r => r.p < 0);
+  const negCount = negRows.length;
+  const negSum = negRows.reduce((s, r) => s + r.p, 0);
+
+  // same-year months before this one that have data — the "other months this year" basis
+  const ytdMonths = [];
+  for (let m = 1; m < monthNum; m++) {
+    const list = base.filter(r => r.d.slice(0, 7) === monthKey(year, m));
+    if (list.length) ytdMonths.push(list);
+  }
+  let negRange = null, salesAvg = null;
+  if (ytdMonths.length) {
+    negRange = [Math.min(...ytdMonths.map(l => l.filter(r => r.p < 0).length)), Math.max(...ytdMonths.map(l => l.filter(r => r.p < 0).length))];
+    salesAvg = ytdMonths.reduce((s, l) => s + l.reduce((a, r) => a + r.s, 0), 0) / ytdMonths.length;
+  }
+
+  // trailing (up to) 4 months immediately prior — the "usual margin" basis
+  const trailing = [];
+  for (let back = 1; back <= 12 && trailing.length < 4; back++) {
+    let mm = monthNum - back, yy = year;
+    if (mm < 1) { mm += 12; yy -= 1; }
+    const list = base.filter(r => r.d.slice(0, 7) === monthKey(yy, mm));
+    if (list.length) trailing.push(list);
+  }
+  let marginRange = null;
+  if (trailing.length) {
+    const margins = trailing.map(l => { const s = l.reduce((a, r) => a + r.s, 0), p = l.reduce((a, r) => a + r.p, 0); return s ? 100 * p / s : 0; });
+    marginRange = [Math.round(Math.min(...margins)), Math.round(Math.max(...margins))];
+  }
+
+  // is this the worst (most negative) loss-month of the year, among months this year actually in the data?
+  const yearMonths = Array.from(new Set(base.filter(r => r.d.slice(0, 4) === String(year)).map(r => r.d.slice(0, 7))));
+  const worstOfYear = yearMonths.every(k => {
+    if (k === monthKey(year, monthNum)) return true;
+    const list = base.filter(r => r.d.slice(0, 7) === k);
+    return list.reduce((s, r) => s + Math.min(r.p, 0), 0) >= negSum;
+  });
+
+  const scMap = aggregate(targetRows, 'sc');
+  const subEntries = Array.from(scMap.entries()).map(([label, o]) => ({ label, sales: o.sales, profit: o.profit }))
+    .filter(e => e.profit < 0).sort((a, b) => a.profit - b.profit).slice(0, 3);
+
+  const ctMap = aggregate(targetRows, 'ct');
+  const catEntries = Array.from(ctMap.entries()).map(([label, o]) => ({ label, sales: o.sales, profit: o.profit, margin: o.sales ? 100 * o.profit / o.sales : 0 }));
+  const weakCat = catEntries.filter(c => c.sales > 1000).sort((a, b) => a.margin - b.margin)[0];
+
+  return { year, monthLabel, sales, profit, rowsCount, avgOrder, margin, negCount, negSum, negRange, salesAvg, marginRange, worstOfYear, subEntries, weakCat };
+}
+function renderMonthMarginGapAnswer(a, dimScope) {
+  const ratio = a.salesAvg ? a.sales / a.salesAvg : null;
+  const ratioText = ratio ? ` (${ratio.toFixed(ratio >= 3 ? 0 : 1)}x a normal month${dimScope ? ' for this scope' : ''})` : '';
+  const marginVs = a.marginRange ? ` vs. the usual ${a.marginRange[0]}–${a.marginRange[1]}% of the last few months` : '';
+  const negVs = a.negRange ? ` (vs. ${a.negRange[0]}–${a.negRange[1]} in the other months this year)` : '';
+  const worstTag = a.worstOfYear ? ' — the worst of the year' : '';
+
+  const subList = a.subEntries.length
+    ? `<li>Growth skewed to low-margin categories.<ul>${a.subEntries.map(e => `<li>${escHtml(e.label)}: ${num(e.sales)} sales, ${num(e.profit)} profit</li>`).join('')}</ul>${a.weakCat ? `${escHtml(a.weakCat.label)} overall: ${num(a.weakCat.sales)} sales, just ${num(a.weakCat.profit)} profit (${a.weakCat.margin.toFixed(0)}% margin).` : ''}</li>`
+    : '';
+  const weakName = a.weakCat ? escHtml(a.weakCat.label) : 'low-margin categories';
+
+  return `<p><b>Why ${escHtml(a.monthLabel)} sales jumped but profit didn't</b></p>
+<p>Sales hit ${num(a.sales)} on ${a.rowsCount} orders${ratioText}, but profit only reached ${num(a.profit)} — a ${a.margin.toFixed(1)}% margin${marginVs}.</p>
+<p>Reasons:</p>
+<ol>
+<li>Volume, not value. Average order size stayed flat at ${num(a.avgOrder)}. More orders, not bigger ones.</li>
+<li>More loss-making orders. ${a.negCount} orders lost money${negVs}, totaling ${num(a.negSum)}${worstTag}.</li>
+${subList}
+</ol>
+<p><b>Bottom line:</b> a volume surge, but much of it was discounted ${weakName} sold at or below cost — so sales climbed sharply while profit barely moved.</p>`;
+}
+
+function mockAnswer(question, items) {
+  const rows = filteredRows();
+  const q = question.toLowerCase();
+  const t = calcTotals(rows);
+  const scope = scopeSentence(items);
+  if (!rows.length) return `<p>There are no rows ${scope}. Widen the date range or clear a filter and ask again.</p>`;
+
+  const monthIdx = MONTH_FULL.findIndex(mn => q.includes(mn.toLowerCase()));
+  if (monthIdx !== -1 && /profit|margin/.test(q) && /sales|orders?/.test(q) && /reason|why/.test(q)) {
+    const dimItems = items.filter(it => it.key !== 'Date range');
+    const analysis = analyzeMonthMarginGap(monthIdx + 1, MONTH_FULL[monthIdx]);
+    if (analysis) return renderMonthMarginGapAnswer(analysis, dimItems.length > 0);
+  }
+
+  const wantsProfit = /profit|margin|loss|negative/.test(q);
+  const metricKey = wantsProfit ? 'profit' : /order/.test(q) && !/sales/.test(q) ? 'orders' : 'sales';
+  const metricName = { sales: 'sales', profit: 'profit', orders: 'orders' }[metricKey];
+  const isCount = metricKey === 'orders';
+  const total = t[metricKey];
+
+  const dim = /customer/.test(q) ? ['cu', 'customers'] : /state/.test(q) ? ['st', 'states'] : /segment/.test(q) ? ['sg', 'segments']
+    : /sub-?cat/.test(q) ? ['sc', 'sub-categories'] : /categor/.test(q) ? ['ct', 'categories'] : /manufactur|brand/.test(q) ? ['mf', 'manufacturers'] : null;
+  const nMatch = q.match(/top\s+(\d+)/); const n = nMatch ? Math.min(parseInt(nMatch[1], 10), 15) : 5;
+
+  if (/negative|loss|losing/.test(q)) {
+    const { all } = topList(rows, dim ? dim[0] : 'sc', 'profit', 50, false);
+    const losers = all.filter(e => e.val < 0).sort((a, b) => a.val - b.val).slice(0, 5);
+    const label = dim ? dim[1] : 'sub-categories';
+    if (!losers.length) return `<p>No ${label} are losing money ${scope}. Total profit is ${num(t.profit)} on ${num(t.sales)} in sales (${pct(t.profit, t.sales)} margin).</p>`;
+    const lossSum = losers.reduce((s, e) => s + e.val, 0);
+    return `<p>${losers.length} ${label} run negative profit ${scope}, together ${num(lossSum)}:</p><ul>${losers.map(e => `<li>${escHtml(e.label)}: ${num(e.val)}</li>`).join('')}</ul><p>Overall profit in this view is ${num(t.profit)} (${pct(t.profit, t.sales)} of ${num(t.sales)} sales), so these are ${t.profit < 0 ? 'the reason the total is in the red' : 'being covered by the profitable lines'}.</p>`;
+  }
+  if (dim) {
+    const { top, all } = topList(rows, dim[0], metricKey, n, isCount);
+    const share = top.reduce((s, e) => s + e.val, 0);
+    const lead = top[0], second = top[1];
+    const gap = second ? ` It leads ${escHtml(second.label)} by ${num(lead.val - second.val, isCount)}.` : '';
+    return `<p>Top ${top.length} ${dim[1]} by ${metricName} ${scope} (${all.length} in total):</p><ul>${top.map((e, i) => `<li>${i + 1}. ${escHtml(e.label)}: ${num(e.val, isCount)} (${pct(e.val, total)})</li>`).join('')}</ul><p>Together they hold ${pct(share, total)} of ${num(total, isCount)}.${gap}</p>`;
+  }
+  if (/trend|over time|growth|daily|weekly|monthly|change/.test(q)) {
+    const s = overtimeSeries(rows, granularity);
+    const arr = s[metricKey];
+    const first = arr[0], last = arr[arr.length - 1];
+    const peakIdx = arr.indexOf(Math.max(...arr));
+    return `<p>${s.labels.length} ${GRAN_LABEL[granularity].toLowerCase()} buckets ${scope}. ${metricName[0].toUpperCase() + metricName.slice(1)} went from ${num(first, isCount)} (${fmtBucketLabel(s.labels[0], granularity)}) to ${num(last, isCount)} (${fmtBucketLabel(s.labels[s.labels.length - 1], granularity)}).</p><p>Peak: ${fmtBucketLabel(s.labels[peakIdx], granularity)} at ${num(arr[peakIdx], isCount)}. Total ${num(total, isCount)}.</p>`;
+  }
+  // default: a 3-bullet summary
+  const seg = topList(rows, 'sg', 'sales', 1).top[0];
+  const cat = topList(rows, 'ct', 'sales', 1).top[0];
+  const st = topList(rows, 'st', 'sales', 1).top[0];
+  return `<p>Summary ${scope}:</p><ul>
+    <li>${num(t.sales)} in sales across ${num(t.orders, true)} orders from ${num(t.customers, true)} customers; profit ${num(t.profit)} (${pct(t.profit, t.sales)} margin).</li>
+    <li>Biggest segment: ${escHtml(seg.label)} (${pct(seg.val, t.sales)} of sales); biggest category: ${escHtml(cat.label)} (${pct(cat.val, t.sales)}).</li>
+    <li>Leading state: ${STATE_NAME[st.label] || st.label} at ${num(st.val)} (${pct(st.val, t.sales)} of sales).</li>
+  </ul>`;
+}
+
+async function askAgent() {
+  const { question } = splitPrompt();
+  const cleanQ = question.trim();
+  if (!cleanQ) { promptEl.focus(); return; }
+  const items = _lastContextItems.slice();
+  const fullPrompt = promptEl.value; // exactly what the user sees is exactly what is sent
+  addUserMsg(cleanQ, items);
+  const bubble = addAgentPending();
+  sendBtn.disabled = true;
+  try {
+    let html;
+    if (AGENT_ENDPOINT) {
+      const res = await fetch(AGENT_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: fullPrompt, context: items, question: cleanQ }) });
+      const ct = res.headers.get('content-type') || '';
+      const payload = ct.includes('json') ? await res.json() : await res.text();
+      const text = typeof payload === 'string' ? payload : (payload.answer || payload.text || JSON.stringify(payload));
+      html = escHtml(text).replace(/\n/g, '<br>');
+    } else {
+      await new Promise(r => setTimeout(r, 2700 + Math.random() * 500)); // feel like a round-trip (+2s for the demo)
+      html = mockAnswer(cleanQ, items);
+    }
+    renderAnswer(bubble, html);
+  } catch (err) {
+    renderAnswer(bubble, `<p class="text-error">Could not reach the agent: ${escHtml(err.message || String(err))}</p>`);
+  } finally {
+    sendBtn.disabled = false;
+    // keep the context, clear the question for the next one
+    promptEl.value = composePrompt(_lastContextBlock, '');
+  }
+}
+
+/* ── rail events ──────────────────────────────────────────────────────────── */
+// Caret guard: a click anywhere in the box tends to land inside the context block, and
+// typing there corrupts the context (and the prefix match with it). If the caret is above
+// the "Question:" line, move it to the end so typing always goes into the question area.
+function questionStart() {
+  if (!_lastContextBlock) return 0;
+  const head = composePrompt(_lastContextBlock, '');
+  return promptEl.value.startsWith(head) ? head.length : 0;
+}
+function guardCaret() {
+  const qs = questionStart();
+  if (promptEl.selectionStart < qs) { const end = promptEl.value.length; promptEl.setSelectionRange(end, end); }
+}
+promptEl.addEventListener('focus', () => setTimeout(guardCaret, 0));
+promptEl.addEventListener('mouseup', () => setTimeout(guardCaret, 0));
+promptEl.addEventListener('keydown', (e) => {
+  // Backspace at the question boundary would eat into the context — stop it there
+  if (e.key === 'Backspace' && promptEl.selectionStart === promptEl.selectionEnd && promptEl.selectionStart <= questionStart() && questionStart() > 0) e.preventDefault();
+});
+
+sendBtn.addEventListener('click', askAgent);
+promptEl.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); askAgent(); } });
+document.getElementById('rail-reset').addEventListener('click', () => { promptEl.value = composePrompt(_lastContextBlock, DEFAULT_QUESTION); promptEl.focus(); });
+document.getElementById('rail-suggest').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-q]'); if (!b) return;
+  promptEl.value = composePrompt(_lastContextBlock, b.dataset.q);
+  promptEl.focus();
+  const end = promptEl.value.length; promptEl.setSelectionRange(end, end);
+});
+// The width transition (.collapsed, ~320ms) and the layout-mode swap (.narrow — the
+// stacked-icon header, the hidden body) are deliberately staggered rather than toggled
+// together: that stagger is what makes the open/close read as smooth instead of
+// stuttering (see the big comment on .agent-rail above for why).
+const RAIL_TRANSITION_MS = 320;
+let _railAnimTimer = null;
+document.getElementById('rail-toggle').addEventListener('click', () => {
+  const rail = document.getElementById('agent-rail');
+  const opening = rail.classList.contains('collapsed');
+  clearTimeout(_railAnimTimer);
+  if (opening) {
+    // reveal the wide layout right away; at 48px it's simply clipped by the rail's own
+    // overflow:hidden until the width transition below catches up to it
+    rail.classList.remove('narrow');
+    rail.classList.remove('collapsed');
+  } else {
+    rail.classList.add('collapsed');
+  }
+  _railAnimTimer = setTimeout(() => {
+    if (!opening) rail.classList.add('narrow'); // snap to the narrow header only once fully shrunk
+    Object.values(charts).forEach(c => c.resize());
+  }, RAIL_TRANSITION_MS);
+});
+
+/* ── boot ────────────────────────────────────────────────────────────────── */
+renderAll();
+// renderAll() -> syncAgentContext() already set the context block; drop the demo
+// question in after it so the box is ready to go, nothing left to type.
+promptEl.value = composePrompt(_lastContextBlock, DEFAULT_QUESTION);
+</script>
+</body>
+</html>

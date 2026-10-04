@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Furniture &amp; Office Performance — after</title>
+<!--
+  hayaData 2026 talk — Beat 4 mock ("the same flow, fixed").
+  SAME dashboard as demo-broken.html (pixel-identical KPIs/charts/table) — the only new
+  thing is the "Ask this report" panel below the table. Figures are ILLUSTRATIVE — verify
+  against the real Superstore dataset before rehearsal (see narrative-arc.md, Beat 4 note).
+  The Q&A is fully scripted for now (see the SCRIPT object below) — no live model call.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link rel="stylesheet" href="dashboard-theme.css">
+<style>
+  .ask-context-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+  .thinking { display: flex; align-items: center; gap: 6px; color: var(--text-disabled); font-size: 12.5px; font-style: italic; }
+  .thinking .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--text-disabled); animation: pulse 1.1s infinite ease-in-out; }
+  .thinking .dot:nth-child(2) { animation-delay: 0.15s; }
+  .thinking .dot:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes pulse { 0%,80%,100% { opacity: 0.25; } 40% { opacity: 1; } }
+</style>
+</head>
+<body>
+
+<header class="report-header">
+  <p>Furniture &amp; Office Performance</p>
+  <span class="report-badge badge-fixed">After — the question stays on the page</span>
+</header>
+
+<div class="filter-bar">
+  <div class="dd-btn has-value">Region: Central <svg class="dd-chevron" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5"/></svg></div>
+  <div class="dd-btn">Category: All <svg class="dd-chevron" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5"/></svg></div>
+  <div class="dd-btn has-value">Year: 2017 <svg class="dd-chevron" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5"/></svg></div>
+</div>
+
+<main class="report-body">
+
+  <div class="kpi-row">
+    <div class="metric-card">
+      <div class="metric-label">Sales</div>
+      <div class="metric-value">$184.2K</div>
+      <div class="metric-trend--up">↑ +6.1% vs 2016</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Profit</div>
+      <div class="metric-value negative">-$6,420</div>
+      <div class="metric-trend--down">↓ only negative region</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Profit ratio</div>
+      <div class="metric-value negative">-3.5%</div>
+      <div class="metric-trend--down">↓ -5.1pp vs 2016</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Orders</div>
+      <div class="metric-value">482</div>
+      <div class="metric-trend--up">↑ +3.9% vs 2016</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Avg. discount</div>
+      <div class="metric-value">22%</div>
+      <div class="metric-trend--down">↑ +4pp vs 2016</div>
+    </div>
+  </div>
+
+  <div class="card span-8">
+    <div class="card-header"><span class="card-title">Sales &amp; profit by month — Central, 2017</span></div>
+    <div class="chart-box"><canvas id="chart-trend"></canvas></div>
+  </div>
+
+  <div class="card span-4">
+    <div class="card-header"><span class="card-title">Profit by region</span></div>
+    <div class="chart-box"><canvas id="chart-region"></canvas></div>
+  </div>
+
+  <div class="card span-12">
+    <div class="card-header">
+      <span class="card-title">Sub-category performance — Central, 2017</span>
+      <span class="text-disabled" style="font-size:12px">top sub-categories by profit impact</span>
+    </div>
+    <div class="data-table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr><th>Sub-category</th><th class="num">Sales</th><th class="num">Avg. discount</th><th class="num">Orders</th><th class="num">Profit</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Tables</td><td class="num">$34,200</td><td class="num">38%</td><td class="num">61</td><td class="num negative">-$8,150</td></tr>
+          <tr><td>Phones</td><td class="num">$18,900</td><td class="num">24%</td><td class="num">33</td><td class="num negative">-$1,780</td></tr>
+          <tr><td>Bookcases</td><td class="num">$11,400</td><td class="num">28%</td><td class="num">24</td><td class="num negative">-$1,900</td></tr>
+          <tr><td>Appliances</td><td class="num">$9,600</td><td class="num">22%</td><td class="num">19</td><td class="num negative">-$1,180</td></tr>
+          <tr><td>Machines</td><td class="num">$9,800</td><td class="num">18%</td><td class="num">15</td><td class="num positive">$140</td></tr>
+          <tr><td>Furnishings</td><td class="num">$7,300</td><td class="num">9%</td><td class="num">41</td><td class="num positive">$1,340</td></tr>
+          <tr><td>Binders</td><td class="num">$15,600</td><td class="num">9%</td><td class="num">88</td><td class="num positive">$2,900</td></tr>
+          <tr><td>Storage</td><td class="num">$18,200</td><td class="num">8%</td><td class="num">54</td><td class="num positive">$3,450</td></tr>
+          <tr><td>Chairs</td><td class="num">$22,400</td><td class="num">11%</td><td class="num">58</td><td class="num positive">$4,200</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ═══ The fix: the question stays where the number is ═══ -->
+  <div class="card span-12 ask-card">
+    <div class="card-header">
+      <span class="card-title">Ask this report</span>
+    </div>
+    <div class="ask-context-row">
+      <span class="ask-context-tag">◆ Region: Central</span>
+      <span class="ask-context-tag">◆ Period: 2017</span>
+      <span class="ask-context-tag">◆ Metric: Profit (excl. returns) — same as this page</span>
+    </div>
+
+    <div class="ask-thread" id="ask-thread"></div>
+
+    <div class="ask-suggest" id="ask-suggest">
+      <button data-q="q1">Why is profit negative here?</button>
+    </div>
+
+    <div class="ask-input-row">
+      <input class="ask-input" id="ask-input" type="text" placeholder="Ask a follow-up…" />
+      <button class="ask-btn" id="ask-btn">Ask</button>
+    </div>
+  </div>
+
+</main>
+
+<script>
+new Chart(document.getElementById('chart-trend'), {
+  type: 'bar',
+  data: {
+    labels: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+    datasets: [
+      {
+        type: 'bar', label: 'Sales', yAxisID: 'y',
+        data: [12500,13100,14200,13800,14500,15200,15800,16400,17100,16800,17200,17600],
+        backgroundColor: 'rgba(91,141,248,0.55)', borderRadius: 3, order: 2,
+      },
+      {
+        type: 'line', label: 'Profit', yAxisID: 'y1',
+        data: [900,650,1200,800,-300,1100,-450,-3200,-5980,-2500,500,860],
+        borderColor: '#e5ff00', backgroundColor: '#e5ff00', pointRadius: 3, tension: 0.3, order: 1,
+      },
+    ],
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: { legend: { labels: { color: '#bababa', font: { family: 'Inter', size: 11 } } } },
+    scales: {
+      x: { ticks: { color: '#8e8e8e', font: { family: 'Inter', size: 11 } }, grid: { display: false } },
+      y:  { position: 'left',  ticks: { color: '#8e8e8e', font: { family: 'Inter', size: 11 } }, grid: { color: '#282828' } },
+      y1: { position: 'right', ticks: { color: '#8e8e8e', font: { family: 'Inter', size: 11 } }, grid: { display: false } },
+    },
+  },
+});
+
+new Chart(document.getElementById('chart-region'), {
+  type: 'bar',
+  data: {
+    labels: ['Central','East','South','West'],
+    datasets: [{
+      data: [-6420, 45200, 28700, 52100],
+      backgroundColor: ['#ff3131','#00b27c','#00b27c','#00b27c'],
+      borderRadius: 3,
+    }],
+  },
+  options: {
+    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: '#8e8e8e', font: { family: 'Inter', size: 11 } }, grid: { color: '#282828' } },
+      y: { ticks: { color: '#bababa', font: { family: 'Inter', size: 12 } }, grid: { display: false } },
+    },
+  },
+});
+
+// ─── Scripted Q&A (Beat 4 demo script from narrative-arc.md) ─────────────────
+// Fully pre-scripted for the talk — no live model call. Each answer "cites" the
+// same context tags shown above, which is the whole point of the beat.
+const SCRIPT = {
+  q1: {
+    question: 'Why is profit negative here?',
+    answer: 'Central lost $6,420 on $184,200 of sales this year (-3.5% margin) — the only ' +
+            'region with negative profit. It concentrates in Q3: August through October alone ' +
+            'account for most of the loss, and it traces mostly to one sub-category.',
+    next: 'q2',
+  },
+  q2: {
+    question: 'Which sub-category?',
+    answer: 'Tables: -$8,150 on $34,200 of sales, at a 38% average discount — more than double ' +
+            'the discount on Chairs or Storage. Every discounted Tables order this year lost ' +
+            'money. Sales held, discount rose, profit fell — that points at pricing, not demand. ' +
+            'Bookcases and Phones are also negative, but far smaller.',
+    next: null,
+  },
+};
+
+const threadEl   = document.getElementById('ask-thread');
+const suggestEl  = document.getElementById('ask-suggest');
+const inputEl    = document.getElementById('ask-input');
+const askBtn     = document.getElementById('ask-btn');
+let askedAny = false;
+
+function appendQuestion(text) {
+  const row = document.createElement('div');
+  row.className = 'chat-msg';
+  row.innerHTML = `
+    <div class="chat-avatar user">S</div>
+    <div><div class="chat-bubble question">${text}</div></div>`;
+  threadEl.appendChild(row);
+}
+
+function appendAnswer(text) {
+  const row = document.createElement('div');
+  row.className = 'chat-msg';
+  row.innerHTML = `
+    <div class="chat-avatar agent">AI</div>
+    <div>
+      <div class="chat-bubble grounded">${text}</div>
+      <div class="chat-meta">grounded in this report — same region, period and profit definition as the page</div>
+    </div>`;
+  threadEl.appendChild(row);
+}
+
+function showThinking() {
+  const row = document.createElement('div');
+  row.className = 'thinking';
+  row.id = 'thinking-row';
+  row.innerHTML = `<span class="dot"></span><span class="dot"></span><span class="dot"></span> reading the report…`;
+  threadEl.appendChild(row);
+  return row;
+}
+
+function renderSuggest(key) {
+  suggestEl.innerHTML = '';
+  if (!key) return;
+  const btn = document.createElement('button');
+  btn.dataset.q = key;
+  btn.textContent = SCRIPT[key].question;
+  suggestEl.appendChild(btn);
+}
+
+function ask(key) {
+  const item = SCRIPT[key];
+  if (!item) return;
+  askedAny = true;
+  appendQuestion(item.question);
+  inputEl.value = '';
+  suggestEl.innerHTML = '';
+  const thinkingRow = showThinking();
+  setTimeout(() => {
+    thinkingRow.remove();
+    appendAnswer(item.answer);
+    renderSuggest(item.next);
+  }, 700);
+}
+
+suggestEl.addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-q]');
+  if (btn) ask(btn.dataset.q);
+});
+
+function tryFreeText() {
+  const text = inputEl.value.trim();
+  if (!text) return;
+  appendQuestion(text);
+  inputEl.value = '';
+  const thinkingRow = showThinking();
+  setTimeout(() => {
+    thinkingRow.remove();
+    appendAnswer('This mock only knows the two scripted questions from the demo — ' +
+                 'the live version will answer anything grounded in this report.');
+  }, 700);
+}
+askBtn.addEventListener('click', tryFreeText);
+inputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryFreeText(); });
+</script>
+</body>
+</html>

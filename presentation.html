@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboards Aren't Dying, They're Getting a Sidekick</title>
+<!--
+  hayaData 2026 — main slide deck (draft 4 arc, 2026-10-04; opening added 2026-09-08;
+  dashboard slide embedded 2026-09-28; closing decided 2026-10-04; Sidekick dashboard
+  slide embedded 2026-10-05).
+  Lean by design: one title + one short description per slide. The talk itself is spoken;
+  this deck is a spine, not a script. The "broken" flow (Section 1) is the Superstore
+  Executive Overview embedded directly at slide 5 via iframe onto demo/dashboard.html and
+  clicked live inside the deck — demo/demo-broken.html is retired from the talk. The "fixed"
+  flow (Section 4) now hands off the same way: slide 13 embeds demo/dashboard-agent.html
+  (the same Overview, plus the embedded Sidekick rail) between "Same dashboard. Sidekick
+  added." and "The dashboard becomes the context that feeds the agent" — demo-fixed.html
+  is retired from the talk too. Both dashboard slides share one .dashboard-slide /
+  .dash-frame / .dash-iframe pattern (looked up by class, not id — see fitDashboard()).
+  Closing: one title-only stance slide, then the thesis slide again; "Ask the dashboard" is
+  spoken, not written.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --canvas: #010101;
+    --card: #282828;
+    --nested: #1e1e1e;
+    --border-subtle: #333;
+    --accent: #e5ff00;
+    --text-primary: #f0f0f0;
+    --text-secondary: #bababa;
+    --text-disabled: #8e8e8e;
+    --text-muted: #5d5d5d;
+    --error: #ff3131;
+    --success: #00b27c;
+    --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--canvas); color: var(--text-primary); font-family: var(--font);
+    overflow: hidden; -webkit-font-smoothing: antialiased;
+  }
+
+  .chrome {
+    position: fixed; top: 0; left: 0; right: 0; padding: 20px 40px;
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 12px; color: var(--text-muted); z-index: 5; pointer-events: none;
+  }
+  .chrome .talk-name { letter-spacing: 0.02em; }
+  .chrome .counter { font-variant-numeric: tabular-nums; }
+
+  .deck { height: 100%; width: 100%; position: relative; }
+  .slide {
+    position: absolute; inset: 0;
+    display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    padding: 80px 120px; text-align: center;
+  }
+  .slide.active { display: flex; }
+
+  .slide h1 {
+    font-size: 52px; font-weight: 800; line-height: 1.15; letter-spacing: -0.01em;
+    max-width: 980px;
+  }
+  .slide h1 .accent { color: var(--accent); }
+  .slide h1 .dim { color: var(--text-disabled); }
+
+  /* "Best practices" reveal slide: a click/→/space stamps "NOT YET" over the
+     title, then fades the desc in — staged by .revealed (see JS). */
+  .reveal-slide h1 { position: relative; }
+  .reveal-slide .bp-text { position: relative; display: inline-block; }
+  .reveal-slide .bp-stamp {
+    position: absolute; top: 50%; left: 50%; white-space: nowrap; pointer-events: none;
+    background: rgba(1,1,1,0.88);
+    border: 5px solid var(--error); border-radius: 10px; color: var(--error);
+    font-size: 36px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 10px 28px; opacity: 0;
+    transform: translate(-50%, -50%) rotate(-9deg) scale(0.6);
+    transition: opacity 0.25s ease 0.3s, transform 0.3s cubic-bezier(.34,1.56,.64,1) 0.3s;
+  }
+  .reveal-slide.revealed .bp-stamp { opacity: 1; transform: translate(-50%, -50%) rotate(-9deg) scale(1); }
+  .reveal-slide .bp-desc {
+    opacity: 0; transform: translateY(10px);
+    transition: opacity 0.3s ease 0.55s, transform 0.3s ease 0.55s;
+  }
+  .reveal-slide.revealed .bp-desc { opacity: 1; transform: translateY(0); }
+  .bp-desc .bp-hl { color: var(--accent); font-weight: 600; }
+
+  .slide .desc {
+    margin-top: 26px; font-size: 20px; font-weight: 400; color: var(--text-secondary);
+    max-width: 760px; line-height: 1.55;
+  }
+  .slide .desc b { color: var(--text-primary); font-weight: 600; }
+  .slide .desc .accent { color: var(--accent); }
+
+  /* LinkedIn QR embed (who-I-am slide) */
+  .qr-img { margin-top: 28px; max-height: 110px; width: auto; height: auto; border-radius: 8px; }
+
+  .slide .handoff {
+    margin-top: 34px; display: inline-flex; align-items: center; gap: 10px;
+    font-size: 14px; color: var(--accent); background: rgba(229,255,0,0.08);
+    border: 1px solid rgba(229,255,0,0.35); border-radius: 999px; padding: 8px 18px;
+    font-weight: 600;
+  }
+
+  .placeholder-tag {
+    margin-top: 28px; font-size: 13px; color: var(--text-muted); font-style: italic;
+  }
+
+  /* Portrait slides (The Analyst / The Agent) — same centered layout as every
+     other slide (title + content centered as one block); image kept small so
+     the title lands at the same vertical spot as a title + desc slide. */
+  .portrait-img { margin-top: 30px; max-height: 260px; max-width: 460px; width: auto; height: auto; }
+
+  /* Thesis slide */
+  .thesis-lines { display: flex; flex-direction: column; gap: 14px; max-width: 880px; }
+  .thesis-lines .l1 { font-size: 40px; font-weight: 700; line-height: 1.3; }
+  .thesis-lines .l2 { font-size: 24px; font-weight: 400; color: var(--text-secondary); line-height: 1.5; }
+  .thesis-lines .l3 { font-size: 30px; font-weight: 700; color: var(--accent); line-height: 1.4; margin-top: 10px; }
+  .thesis-lines .accent { color: var(--accent); }
+
+  /* Dashboard slide — the embedded live demo (iframe onto demo/dashboard.html).
+     The dashboard's own layout is fixed-height content (chart-box is a hard 260px in
+     the shared theme), so instead of letting it scroll inside the slide, the iframe is
+     rendered at its natural single-row-filter size (1800x930 — narrower and the filter
+     pills wrap to a second row, taller than needed and it's just wasted space) and then
+     scaled as one unit to fit whatever the slide's box turns out to be. */
+  .slide.dashboard-slide { padding: 76px 96px 64px; }
+  .dash-frame {
+    width: 100%; height: 100%; border-radius: 12px; overflow: hidden;
+    background: #010101; position: relative;
+  }
+  .dash-frame iframe {
+    position: absolute; width: 1800px; height: 930px; border: none;
+    transform-origin: top left;
+  }
+
+  /* Two-exits slide */
+  .exits-row { display: flex; gap: 32px; margin-top: 36px; }
+  .exit-box { background: var(--card); border-radius: 12px; padding: 26px 30px; width: 300px; text-align: left; }
+  .exit-box .exit-name { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+  .exit-box .exit-cost { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
+  .exit-box.time .exit-cost { color: var(--error); }
+  .exit-box.context .exit-cost { color: var(--error); }
+  .exit-box p { font-size: 14px; color: var(--text-secondary); line-height: 1.5; }
+
+  /* Jigsaw comparison grid: Dashboard | Feature | Agent, three columns, no
+     arrows — the winning side is simply bigger and accent-colored, the losing
+     side smaller and muted, so "who wins this row" reads at a glance. */
+  .jig-grid {
+    margin-top: 34px; width: 100%; max-width: 860px;
+    display: grid; grid-template-columns: 1fr auto 1fr; column-gap: 28px; row-gap: 16px;
+    align-items: center;
+  }
+  .jig-grid .head {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--text-disabled); padding-bottom: 10px; border-bottom: 1px solid var(--border-subtle);
+  }
+  .jig-grid .head.dash { text-align: right; }
+  .jig-grid .head.feature { text-align: center; }
+  .jig-grid .head.agent { text-align: left; }
+  .jig-grid .feature-label { text-align: center; font-size: 14px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
+  .jig-grid .side { font-size: 14px; color: var(--text-muted); }
+  .jig-grid .side.dash { text-align: right; }
+  .jig-grid .side.agent { text-align: left; }
+  .jig-grid .side.win { font-size: 21px; font-weight: 700; color: var(--accent); }
+  .jig-grid .side.lose { font-style: italic; }
+  .jig-grid .rule { padding-top: 16px; border-top: 1px solid var(--border-subtle); }
+
+  /* Reveal-on-click slides: any [data-stage] element starts hidden and pops in
+     when the Coach/presenter clicks next/→/space — staged by JS (see advance()).
+     Used here for each grid row (stages 1-5) and the "They fit." line (stage 6). */
+  .multi-reveal [data-stage] {
+    opacity: 0; transform: scale(0.85);
+    transition: opacity 0.25s ease, transform 0.25s cubic-bezier(.34,1.56,.64,1);
+  }
+  .multi-reveal [data-stage].show { opacity: 1; transform: scale(1); }
+  .fit-line { margin-top: 34px; font-size: 30px; font-weight: 700; }
+  .fit-line .accent { color: var(--accent); }
+
+  /* Must-have slides */
+  .mh-badge {
+    width: 64px; height: 64px; border-radius: 50%; border: 2px solid var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 800; color: var(--accent); margin-bottom: 24px;
+  }
+
+  .footer-nav {
+    position: fixed; bottom: 22px; left: 0; right: 0;
+    display: flex; justify-content: center; gap: 8px; z-index: 5;
+  }
+  .footer-nav .pip {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--border-subtle); cursor: pointer;
+  }
+  .footer-nav .pip.active { background: var(--accent); width: 18px; border-radius: 4px; }
+
+  /* Side arrows */
+  .nav-arrow {
+    position: fixed; top: 50%; transform: translateY(-50%);
+    width: 48px; height: 48px; border-radius: 50%;
+    background: var(--card); border: 1px solid var(--border-subtle);
+    color: var(--text-secondary); font-size: 22px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; z-index: 6; user-select: none; transition: color .15s, border-color .15s;
+  }
+  .nav-arrow:hover { color: var(--accent); border-color: var(--accent); }
+  .nav-arrow.prev { left: 28px; }
+  .nav-arrow.next { right: 28px; }
+  .nav-arrow.disabled { opacity: 0.25; pointer-events: none; }
+</style>
+</head>
+<body>
+
+<div class="chrome">
+  <span class="talk-name">Dashboards Aren't Dying, They're Getting a Sidekick</span>
+  <span class="counter" id="counter">1 / 19</span>
+</div>
+
+<div class="deck" id="deck">
+
+  <!-- 1 — Title -->
+  <section class="slide active">
+    <h1><span class="accent">Dashboards</span> Aren't Dying,<br>They're Getting a <span class="accent">Sidekick</span></h1>
+    <div class="desc">Haim Moscovici &nbsp;·&nbsp; Data Analytics Tech Lead @ WSC Sports &nbsp;·&nbsp; hayaData 2026</div>
+  </section>
+
+  <!-- 2 — Opening: the hook -->
+  <section class="slide">
+    <h1><span class="accent">80%</span> of the times, people leave a dashboard with <span class="accent">more questions</span> than they came with.</h1>
+    <div class="desc">That's not a <span class="accent">bug</span>. That's a <span class="accent">feature</span>.</div>
+  </section>
+
+  <!-- 2b — Opening: who + what -->
+  <section class="slide">
+    <h1>Haim <span class="accent">Moscovici</span></h1>
+    <div class="desc">Over 8 year analytics experience, 6 of them in WSC Sports</div>
+    <img class="qr-img" src="linkedin-qr.png" alt="LinkedIn QR code">
+  </section>
+
+  <!-- 3 — Beat 1 hand-off -->
+  <section class="slide">
+    <h1>We've all met <span class="accent">dashboards</span> like this.</h1>
+  </section>
+
+  <!-- 3b — Live demo: Superstore Executive Dashboard (embedded) -->
+  <section class="slide dashboard-slide">
+    <div class="dash-frame">
+      <iframe class="dash-iframe" src="demo/dashboard.html" title="Superstore Executive Dashboard" loading="lazy"></iframe>
+    </div>
+  </section>
+
+  <!-- 4 — Thesis -->
+  <section class="slide">
+    <div class="thesis-lines">
+      <div class="l1">A good dashboard raises<br><span class="accent">follow-up questions</span></div>
+      <div class="l2">sometime it can answer them by itself, but sometimes it can't</div>
+    </div>
+  </section>
+
+  <!-- 5 — Beat 2: the two exits -->
+  <section class="slide">
+    <h1>"Who's gonna answer the<br><span class="accent">follow-up question</span>?"</h1>
+  </section>
+
+  <!-- 5b — The Analyst (portrait) -->
+  <section class="slide">
+    <h1>The <span class="accent">Analyst</span></h1>
+    <img class="portrait-img" src="analyst.jpg" alt="The Analyst">
+  </section>
+
+  <!-- 5c — The Agent (portrait) -->
+  <section class="slide">
+    <h1>The <span class="accent">Agent</span></h1>
+    <img class="portrait-img" src="agent.jpg" alt="The Agent">
+  </section>
+
+  <!-- 6 — Beat 3 opener: steelman -->
+  <section class="slide">
+    <h1>"Why not just work<br>with <span class="accent">an agent</span>?"</h1>
+  </section>
+
+  <!-- 7 — Beat 3: the comparison grid — each row appears on its own click, top
+       to bottom (winner side enlarged + highlighted, loser side dim), then one
+       more click reveals "They fit." below the grid. -->
+  <section class="slide multi-reveal" data-stage="0" data-max-stage="6">
+    <h1>Because they're <span class="accent">not competing</span>.</h1>
+    <div class="jig-grid">
+      <div class="head dash">Dashboard</div>
+      <div class="head feature">Feature</div>
+      <div class="head agent">Agent</div>
+
+      <div class="side dash win" data-stage="1">multiple answers in a glance</div>
+      <div class="feature-label" data-stage="1">Speed of a first look</div>
+      <div class="side agent lose" data-stage="1">empty canvas</div>
+
+      <div class="side dash lose rule" data-stage="2">finite amount of questions</div>
+      <div class="feature-label rule" data-stage="2">Flexibility &amp; agility</div>
+      <div class="side agent win rule" data-stage="2">Adaptable workflows</div>
+
+      <div class="side dash win rule" data-stage="3">Single source of truth</div>
+      <div class="feature-label rule" data-stage="3">Shared truth</div>
+      <div class="side agent lose rule" data-stage="3">Siloed perspectives</div>
+
+      <div class="side dash lose rule" data-stage="4">Static format</div>
+      <div class="feature-label rule" data-stage="4">Presentation</div>
+      <div class="side agent win rule" data-stage="4">Dynamic &amp; polished</div>
+
+      <div class="side dash win rule" data-stage="5">100% deterministic</div>
+      <div class="feature-label rule" data-stage="5">Trust</div>
+      <div class="side agent lose rule" data-stage="5">fundamentally stochastic</div>
+    </div>
+    <div class="fit-line" data-stage="6">They <span class="accent">fit</span>.</div>
+  </section>
+
+  <!-- 9 — Beat 4 hand-off (moved ahead of the former Beat 3 landing slide,
+       2026-10 revision: the sidekick reveal now comes before the reframe). -->
+  <section class="slide">
+    <h1>Same dashboard. <span class="accent">Sidekick added.</span></h1>
+  </section>
+
+  <!-- 9b — Live demo: same Superstore Overview, now with the embedded Sidekick rail
+       (demo/dashboard-agent.html) — added 2026-10-05, same embed pattern as slide 5
+       (dashboard-slide / dash-frame / scaled iframe), see the CSS comment above
+       .dash-frame for why it's a scale rather than a responsive reflow. -->
+  <section class="slide dashboard-slide">
+    <div class="dash-frame">
+      <iframe class="dash-iframe" src="demo/dashboard-agent.html" title="Superstore Executive Dashboard with embedded Sidekick" loading="lazy"></iframe>
+    </div>
+  </section>
+
+  <!-- 8 — Beat 3 landing -->
+  <section class="slide">
+    <h1>The <span class="accent">dashboard</span> becomes the <span class="accent">context</span> that feeds the <span class="accent">agent</span></h1>
+    <div class="desc">same time frame, same filters</div>
+  </section>
+
+  <!-- 10 — Beat 5 frame: "Best Practices" struck through + X'd on the next
+       click/arrow/space, then the desc fades in — see the .reveal-slide JS. -->
+  <section class="slide reveal-slide">
+    <h1><span class="bp-text">Best <span class="accent">practices</span></span><span class="bp-stamp">Not Yet</span></h1>
+    <div class="desc bp-desc">Just <span class="bp-hl">3</span> things you <span class="bp-hl">can't</span> skip.</div>
+  </section>
+
+  <!-- 11 — Must-have: grounding -->
+  <section class="slide">
+    <div class="mh-badge">1</div>
+    <h1>Grounding</h1>
+    <div class="desc">The agent inherits the report's query and definitions.<br>It does not infer its own.</div>
+  </section>
+
+  <!-- 12 — Must-have: trust -->
+  <section class="slide">
+    <div class="mh-badge">2</div>
+    <h1>Trust</h1>
+    <div class="desc">Monitor and evaluate the agent responses</div>
+  </section>
+
+  <!-- 13 — Must-have: permissions -->
+  <section class="slide">
+    <div class="mh-badge">3</div>
+    <h1>Permissions</h1>
+    <div class="desc">Only relevant tables &nbsp;·&nbsp; Row-Level security</div>
+  </section>
+
+
+  <!-- 18 — Closing: the stance (title only, decided 2026-10-04). Spoken script in
+       narrative-arc.md, Section 6. -->
+  <section class="slide">
+    <h1>Like any other thing in the AI era,<br>dashboards need to <span class="accent">adapt and upgrade</span>.</h1>
+  </section>
+
+</div>
+
+<div class="footer-nav" id="pips"></div>
+<div class="nav-arrow prev" id="prev" title="Previous">&#8592;</div>
+<div class="nav-arrow next" id="next" title="Next">&#8594;</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  const counter = document.getElementById('counter');
+  const pipsEl = document.getElementById('pips');
+  let i = 0;
+
+  slides.forEach((_, idx) => {
+    const pip = document.createElement('div');
+    pip.className = 'pip' + (idx === 0 ? ' active' : '');
+    pip.addEventListener('click', () => go(idx));
+    pipsEl.appendChild(pip);
+  });
+  const pips = document.querySelectorAll('.pip');
+
+  function go(n) {
+    if (n < 0 || n >= slides.length) return;
+    slides[i].classList.remove('active');
+    pips[i].classList.remove('active');
+    i = n;
+    slides[i].classList.add('active');
+    pips[i].classList.add('active');
+    counter.textContent = (i + 1) + ' / ' + slides.length;
+    syncArrows();
+    if (slides[i].classList.contains('dashboard-slide')) fitDashboard();
+    // Every slide arrived at via a jump (not the in-place reveal step below)
+    // starts fresh, so the "Best Practices" stamp replays each time.
+    if (slides[i].classList.contains('reveal-slide')) slides[i].classList.remove('revealed');
+    // Same for a multi-stage slide (the jigsaw table): reset to stage 0 and
+    // hide every staged element so the checks replay top to bottom again.
+    if (slides[i].classList.contains('multi-reveal')) {
+      slides[i].dataset.stage = '0';
+      slides[i].querySelectorAll('[data-stage]').forEach((el) => el.classList.remove('show'));
+    }
+  }
+
+  /* "Next" (click / → / space) plays a slide's staged reveal(s) in place first,
+     then on the following press(es) moves to the next slide like normal. */
+  function advance() {
+    const cur = slides[i];
+    if (cur.classList.contains('reveal-slide') && !cur.classList.contains('revealed')) {
+      cur.classList.add('revealed');
+      return;
+    }
+    if (cur.classList.contains('multi-reveal')) {
+      const stage = parseInt(cur.dataset.stage || '0', 10);
+      const max = parseInt(cur.dataset.maxStage || '0', 10);
+      if (stage < max) {
+        const nextStage = stage + 1;
+        cur.dataset.stage = String(nextStage);
+        cur.querySelectorAll('[data-stage="' + nextStage + '"]').forEach((el) => el.classList.add('show'));
+        return;
+      }
+    }
+    go(i + 1);
+  }
+
+  /* Scale the embedded dashboard (fixed 1800x930 intrinsic size) as one unit to
+     fit whatever box the slide turns out to have — see the CSS comment above
+     .dash-frame for why this is a scale, not a responsive reflow or a scroll.
+     Looked up by class, not id: there are now two dashboard-slide instances
+     (slide 5's plain dashboard.html and slide 13's dashboard-agent.html with the
+     embedded Sidekick rail), so this always fits whichever one is currently active. */
+  function fitDashboard() {
+    const slide = slides[i];
+    if (!slide || !slide.classList.contains('dashboard-slide')) return;
+    const frame = slide.querySelector('.dash-frame');
+    const iframe = slide.querySelector('.dash-iframe');
+    if (!frame || !iframe) return;
+    const iw = 1800, ih = 930;
+    const cw = frame.clientWidth, ch = frame.clientHeight;
+    if (!cw || !ch) return;
+    const scale = Math.min(cw / iw, ch / ih);
+    const left = (cw - iw * scale) / 2, top = (ch - ih * scale) / 2;
+    iframe.style.left = left + 'px';
+    iframe.style.top = top + 'px';
+    iframe.style.transform = 'scale(' + scale + ')';
+  }
+  window.addEventListener('resize', () => {
+    if (slides[i].classList.contains('dashboard-slide')) fitDashboard();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') advance();
+    if (e.key === 'ArrowLeft' || e.key === 'PageUp') go(i - 1);
+    if (e.key === 'Home') go(0);
+    if (e.key === 'End') go(slides.length - 1);
+  });
+  const prevBtn = document.getElementById('prev');
+  const nextBtn = document.getElementById('next');
+  prevBtn.addEventListener('click', () => go(i - 1));
+  nextBtn.addEventListener('click', () => advance());
+  function syncArrows() {
+    prevBtn.classList.toggle('disabled', i === 0);
+    nextBtn.classList.toggle('disabled', i === slides.length - 1);
+  }
+  syncArrows();
+  if (slides[i].classList.contains('dashboard-slide')) fitDashboard();
+</script>
+</body>
+</html>

@@ -1,0 +1,210 @@
+/*
+ * dashboard-theme.css — shared dark dashboard theme for the hayaData 2026 talk mocks.
+ * Used by demo-broken.html and demo-fixed.html so both mocks look like one real product.
+ * Token values and structural classes follow the same conventions as our internal
+ * agent-built HTML report framework (dark canvas, card grid, KPI row, filter bar) —
+ * no internal system names, data, or branding are reproduced here.
+ */
+
+/* ═══════════════════════════════════════════════════════════════
+   TOKENS
+═══════════════════════════════════════════════════════════════ */
+:root {
+  --canvas:        #010101;
+  --card:          #282828;
+  --nested:        #1e1e1e;
+  --overlay:       #181818;
+  --border:        #404040;
+  --border-subtle: #333;
+
+  --accent:        #e5ff00;
+  --accent-hover:  #d4eb00;
+  --accent-muted:  rgba(229, 255, 0, 0.08);
+
+  --text-primary:   #f0f0f0;
+  --text-secondary: #bababa;
+  --text-disabled:  #8e8e8e;
+  --text-muted:     #5d5d5d;
+
+  --success: #00b27c;
+  --error:   #ff3131;
+  --warning: #ffae00;
+
+  --p0: #5B8DF8;
+  --p1: #B44EF5;
+  --p2: #F5C518;
+  --p3: #2DD4BF;
+  --p4: #F07840;
+
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--canvas);
+  font-family: var(--font);
+  color: var(--text-primary);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar       { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #404040; border-radius: 9999px; }
+* { scrollbar-width: thin; scrollbar-color: #404040 transparent; }
+
+/* ═══════════════════════════════════════════════════════════════
+   PAGE STRUCTURE
+═══════════════════════════════════════════════════════════════ */
+.report-header { padding: 24px 40px 0; display: flex; align-items: baseline; gap: 12px; }
+.report-header p { font-size: 13px; color: var(--text-secondary); }
+.report-header .report-badge {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  padding: 3px 8px; border-radius: 4px;
+}
+.report-badge.badge-broken { background: rgba(255,49,49,0.12); color: var(--error); }
+.report-badge.badge-fixed  { background: var(--accent-muted); color: var(--accent); }
+
+.filter-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 16px 40px; flex-wrap: wrap;
+  background: var(--canvas);
+}
+
+.report-body {
+  padding: 0 40px 48px;
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 16px;
+}
+
+.span-3  { grid-column: span 3; }
+.span-4  { grid-column: span 4; }
+.span-6  { grid-column: span 6; }
+.span-8  { grid-column: span 8; }
+.span-12 { grid-column: 1 / -1; }
+
+/* ═══════════════════════════════════════════════════════════════
+   FILTER PILL (static — non-functional dropdown look for the mock)
+═══════════════════════════════════════════════════════════════ */
+.dd-btn {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 12px;
+  color: var(--text-secondary);
+  font-size: 14px; font-family: var(--font);
+  white-space: nowrap;
+  min-width: 140px; height: 36px;
+}
+.dd-btn.has-value { border-color: var(--accent); color: var(--text-primary); }
+.dd-btn .dd-chevron { width: 14px; height: 14px; flex-shrink: 0; opacity: 0.6; margin-left: auto; }
+
+/* ═══════════════════════════════════════════════════════════════
+   CARD
+═══════════════════════════════════════════════════════════════ */
+.card {
+  background: var(--card);
+  border-radius: 8px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+.card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 8px; }
+.card-title  { font-size: 18px; font-weight: 600; color: var(--text-primary); }
+
+/* ═══════════════════════════════════════════════════════════════
+   KPI
+═══════════════════════════════════════════════════════════════ */
+.kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; grid-column: 1 / -1; }
+.metric-card { background: var(--card); border-radius: 8px; padding: 16px 20px; }
+.metric-label { font-size: 13px; color: var(--text-secondary); }
+.metric-value { font-size: 28px; font-weight: 700; color: var(--accent); line-height: 1.3; margin-top: 6px; }
+.metric-value.negative { color: var(--error); }
+.metric-trend--up   { font-size: 12px; color: var(--success); margin-top: 6px; }
+.metric-trend--down { font-size: 12px; color: var(--error);   margin-top: 6px; }
+
+/* ═══════════════════════════════════════════════════════════════
+   CHART
+═══════════════════════════════════════════════════════════════ */
+.chart-box { position: relative; width: 100%; height: 260px; }
+.chart-box.sm { height: 220px; }
+
+/* ═══════════════════════════════════════════════════════════════
+   TABLE
+═══════════════════════════════════════════════════════════════ */
+.data-table-wrap { overflow-x: auto; }
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table th {
+  text-align: left; font-size: 12px; font-weight: 600; color: var(--text-disabled);
+  text-transform: uppercase; letter-spacing: 0.03em;
+  padding: 0 16px 10px; border-bottom: 1px solid var(--border-subtle);
+}
+.data-table td {
+  font-size: 14px; color: var(--text-primary);
+  padding: 12px 16px; border-bottom: 1px solid var(--border-subtle);
+}
+.data-table tr:last-child td { border-bottom: none; }
+.data-table th.num, .data-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.data-table td.negative { color: var(--error); }
+.data-table td.positive { color: var(--success); }
+
+/* ═══════════════════════════════════════════════════════════════
+   ESCAPE PANELS (Beat 1 — the broken flow: Slack still + chat window)
+═══════════════════════════════════════════════════════════════ */
+.escape-panel { background: var(--nested); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 16px; }
+.escape-panel .escape-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--text-disabled); margin-bottom: 10px; display: flex; align-items: center; gap: 6px;
+}
+.escape-panel .escape-cost { margin-left: auto; color: var(--error); font-size: 11px; text-transform: none; letter-spacing: 0; }
+
+.chat-msg { display: flex; gap: 10px; margin-bottom: 10px; align-items: flex-start; }
+.chat-avatar { width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+.chat-avatar.user  { background: var(--p0); color: #fff; }
+.chat-avatar.agent { background: var(--accent); color: var(--canvas); }
+.chat-bubble { background: var(--card); border-radius: 8px; padding: 10px 12px; font-size: 13.5px; line-height: 1.5; color: var(--text-primary); max-width: 100%; }
+.chat-bubble.question { background: var(--overlay); }
+.chat-meta { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+/* ═══════════════════════════════════════════════════════════════
+   EMBEDDED ASK BOX (Beat 4 — the fixed flow: the agent lives on the report)
+═══════════════════════════════════════════════════════════════ */
+.ask-card { border: 1px solid var(--accent); box-shadow: 0 0 0 1px var(--accent-muted); }
+.ask-thread { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; min-height: 40px; }
+.ask-input-row { display: flex; gap: 8px; margin-top: auto; }
+.ask-input {
+  flex: 1; background: var(--nested); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 14px; color: var(--text-primary);
+  font-family: var(--font); font-size: 14px;
+}
+.ask-input::placeholder { color: var(--text-disabled); }
+.ask-btn {
+  background: var(--accent); color: var(--canvas); border: none; border-radius: 8px;
+  padding: 0 18px; font-family: var(--font); font-size: 14px; font-weight: 700;
+  cursor: pointer;
+}
+.ask-btn:hover { background: var(--accent-hover); }
+.ask-btn:disabled { opacity: 0.4; cursor: default; }
+.ask-suggest { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.ask-suggest button {
+  background: var(--nested); border: 1px solid var(--border-subtle); color: var(--text-secondary);
+  border-radius: 999px; padding: 6px 12px; font-size: 12px; font-family: var(--font); cursor: pointer;
+}
+.ask-suggest button:hover { border-color: var(--accent); color: var(--accent); }
+.ask-context-tag {
+  font-size: 11px; color: var(--text-disabled); background: var(--nested);
+  border-radius: 4px; padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px;
+}
+.chat-bubble.grounded { border-left: 2px solid var(--accent); }
+
+/* ═══════════════════════════════════════════════════════════════
+   UTILITIES
+═══════════════════════════════════════════════════════════════ */
+.text-secondary { color: var(--text-secondary); }
+.text-disabled  { color: var(--text-disabled); }
+.text-accent    { color: var(--accent); }
+.text-error     { color: var(--error); }
+.mono           { font-variant-numeric: tabular-nums; }
