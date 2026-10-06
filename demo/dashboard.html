@@ -872,6 +872,82 @@ document.getElementById('gran-toggle').addEventListener('click', (e) => {
 
 /* ── boot ────────────────────────────────────────────────────────────────── */
 renderAll();
+
+/* ── scripted demo steps, driven by the parent deck's "forward" clicks ──────
+   The slide embedding this page (presentation.html, the Section 1 "broken"
+   dashboard) stages one action per click-forward via postMessage — postMessage
+   works across the file:// origin boundary even though direct cross-frame DOM
+   access does not. Each step replays one real user action: open the State
+   dropdown → California → open the date picker → This Year → Apply → Month
+   granularity → open the September tooltip → Profit → Orders. Driven through
+   the same DOM elements + event handlers a real click would hit, so it
+   exercises the exact same code paths. ── */
+function demoStepOpenStateDropdown() {
+  const btn = document.querySelector('#filter-bar .dd-wrap .dd-btn.filter-dd');
+  if (btn) btn.click();
+}
+function demoStepSelectCalifornia() {
+  const panel = document.querySelector('#filter-bar .dd-wrap .dd-panel.open');
+  const item = panel && Array.from(panel.querySelectorAll('.dd-item')).find(d => d.textContent.trim().startsWith('California'));
+  if (item) item.click();
+  // commit the selection right away, same as the global Apply button a presenter
+  // would click next — folded in here so the filter is visibly live after one step
+  const applyBtn = document.querySelector('.filter-apply-btn');
+  if (applyBtn && !applyBtn.disabled) applyBtn.click();
+}
+// Picker is already open: navigate to September and pick Sep 1 -> Sep 30 of the
+// effective year (Apply is its own step, like the This Year flow)
+function demoStepPickSeptemberRange() {
+  const year = EFFECTIVE_MAX_DATE.slice(0, 4);
+  const label = document.getElementById('dp-month-label');
+  const prev = document.getElementById('dp-prev-btn');
+  for (let i = 0; i < 24 && label && prev && label.textContent !== 'September ' + year; i++) prev.click();
+  const day = d => document.querySelector(`#dp-grid .dp-day[data-date="${year}-09-${d}"]`);
+  // re-query between clicks: each click rebuilds the grid, so a button grabbed
+  // before the first click is detached by the time the second one fires
+  const first = day('01'); if (first) first.click();
+  const last = day('30'); if (last) last.click();
+}
+function demoStepOpenDatePicker() { const el = document.getElementById('dp-trigger'); if (el) el.click(); }
+function demoStepPickThisYear() { const el = document.querySelector('.dp-shortcut[data-days="year"]'); if (el) el.click(); }
+function demoStepApplyDateRange() { const el = document.getElementById('dp-apply-btn'); if (el && !el.disabled) el.click(); }
+function demoStepPickMonthGranularity() { const el = document.querySelector('#gran-toggle button[data-gran="month"]'); if (el) el.click(); }
+function demoStepOpenSeptemberTooltip() {
+  const chart = charts['overtime'];
+  if (!chart) return;
+  const labels = chart.data.labels;
+  const year = EFFECTIVE_MAX_DATE.slice(0, 4);
+  let idx = labels.indexOf(`${year}-09`);
+  if (idx === -1) idx = labels.reduce((best, l, i) => (l.endsWith('-09') ? i : best), -1);
+  if (idx === -1) return;
+  const point = chart.getDatasetMeta(0).data[idx];
+  if (!point) return;
+  chart.setActiveElements([{ datasetIndex: 0, index: idx }]);
+  chart.tooltip.setActiveElements([{ datasetIndex: 0, index: idx }], { x: point.x, y: point.y });
+  chart.update();
+}
+function demoStepPickProfit() { const el = document.querySelector('#metric-toggle button[data-metric="profit"]'); if (el) el.click(); }
+function demoStepPickOrders() { const el = document.querySelector('#metric-toggle button[data-metric="orders"]'); if (el) el.click(); }
+
+const DEMO_STEPS = [
+  demoStepOpenStateDropdown,
+  demoStepSelectCalifornia,
+  demoStepOpenDatePicker,
+  demoStepPickSeptemberRange,
+  demoStepApplyDateRange,
+  demoStepOpenDatePicker,
+  demoStepPickThisYear,
+  demoStepApplyDateRange,
+  demoStepPickMonthGranularity,
+  demoStepPickProfit,
+  demoStepPickOrders,
+];
+window.addEventListener('message', (e) => {
+  const data = e.data;
+  if (!data || data.type !== 'dash-demo-step') return;
+  const step = DEMO_STEPS[data.step - 1];
+  if (step) step();
+});
 </script>
 </body>
 </html>

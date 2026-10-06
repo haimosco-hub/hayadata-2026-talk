@@ -93,6 +93,11 @@
     margin-top: 26px; font-size: 20px; font-weight: 400; color: var(--text-secondary);
     max-width: 760px; line-height: 1.55;
   }
+  .slide .bio-row { display: flex; align-items: center; justify-content: center; gap: 32px; width: 100%; max-width: 1100px; }
+  .slide .bio-list { list-style: disc; padding-left: 28px; text-align: left; margin-top: 26px; color: var(--text-primary); font-size: 26px; max-width: 950px; }
+  .slide .bio-row .qr-img { margin-top: 26px; flex-shrink: 0; }
+  .slide .bio-list li { margin-top: 10px; }
+  .slide .bio-list li::marker { color: var(--accent); }
   .slide .desc b { color: var(--text-primary); font-weight: 600; }
   .slide .desc .accent { color: var(--accent); }
 
@@ -147,38 +152,105 @@
   .exit-box.context .exit-cost { color: var(--error); }
   .exit-box p { font-size: 14px; color: var(--text-secondary); line-height: 1.5; }
 
-  /* Jigsaw comparison grid: Dashboard | Feature | Agent, three columns, no
-     arrows — the winning side is simply bigger and accent-colored, the losing
-     side smaller and muted, so "who wins this row" reads at a glance. */
-  .jig-grid {
-    margin-top: 34px; width: 100%; max-width: 860px;
-    display: grid; grid-template-columns: 1fr auto 1fr; column-gap: 28px; row-gap: 16px;
-    align-items: center;
+  /* Duel slide (slide 11): Dashboard portrait on the left, Agent portrait on the
+     right, and a feature chip that appears in the middle on one click, then on
+     the next click flies under the winner's portrait and stacks there (FLIP
+     animation in placeChip()). Replaces the earlier three-column table. */
+  /* Fixed-width columns (not 1fr), sized to the content itself (320px image,
+     260px for the longest chip/fit-line text) with justify-content:center
+     keeping the whole group centered in the slide: 1fr side columns on a
+     100%-wide container were auto-expanding past the image's own size, and
+     centering the image WITHIN that wider column (align-items:center on
+     .duel-side) quietly added its own margin on top of the gap — so shrinking
+     only the center track barely moved the portraits together at all. */
+  .duel {
+    position: relative; margin-top: 30px; padding-top: 48px; width: 100%; max-width: 1100px;
+    display: grid; grid-template-columns: 320px 260px 320px; column-gap: 16px;
+    justify-content: center; align-items: start;
   }
-  .jig-grid .head {
-    font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em;
-    color: var(--text-disabled); padding-bottom: 10px; border-bottom: 1px solid var(--border-subtle);
+  .duel-side { display: flex; flex-direction: column; align-items: center; }
+  /* Holds the name label and the image together, but the label is positioned
+     absolutely (see .duel-name) so it floats above the image WITHOUT adding
+     to this wrapper's layout height — .duel-portrait's box stays exactly the
+     image's own size, which is what keeps it vertically aligned with
+     .duel-center (the chips / "They fit.") further down. */
+  .duel-portrait { position: relative; }
+  .duel-img-wrap {
+    width: 320px; height: 224px; border-radius: 12px; overflow: hidden;
+    background: var(--canvas); display: flex; align-items: center; justify-content: center;
   }
-  .jig-grid .head.dash { text-align: right; }
-  .jig-grid .head.feature { text-align: center; }
-  .jig-grid .head.agent { text-align: left; }
-  .jig-grid .feature-label { text-align: center; font-size: 14px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
-  .jig-grid .side { font-size: 14px; color: var(--text-muted); }
-  .jig-grid .side.dash { text-align: right; }
-  .jig-grid .side.agent { text-align: left; }
-  .jig-grid .side.win { font-size: 21px; font-weight: 700; color: var(--accent); }
-  .jig-grid .side.lose { font-style: italic; }
-  .jig-grid .rule { padding-top: 16px; border-top: 1px solid var(--border-subtle); }
+  /* contain, not cover: these portraits (a monitor, a standing figure) are
+     taller/narrower than the box, so cover cropped their top/bottom off.
+     contain shows the whole image, letterboxed into the pure-black box. */
+  .duel-img-wrap img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .duel-img-wrap.missing img { display: none; }
+  .duel-img-wrap.missing::after {
+    content: attr(data-missing); font-size: 13px; color: var(--text-muted); font-style: italic;
+  }
+  .duel-name {
+    position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+    margin-bottom: 14px; font-size: 26px; font-weight: 800; white-space: nowrap;
+  }
+  /* Fixed height (not min-height), sized for the max chips that land on one
+     side (3) with a little slack — so a side filling up never grows the grid
+     row and shifts the whole vertically-centered slide (what "min-height"
+     let happen before: growing content pushed the title upward on clicks).
+     align-items: center (not stretch, flex's column default) keeps a landed
+     chip at its own natural width — see .duel-wins .chip below for why that
+     matters. */
+  .duel-wins { margin-top: 14px; display: flex; flex-direction: column; align-items: center; gap: 8px; height: 150px; width: 260px; }
+  .duel-center { position: relative; height: 224px; display: flex; align-items: center; justify-content: center; }
+  /* Chips already look like their landed ("win") state from the moment they
+     appear in the center — accent color, accent border/background, fixed
+     size — so the click-to-land animation only MOVES the chip. Nothing about
+     its color, border or size changes at any point; it just travels. */
+  .chip {
+    font-size: 15px; font-weight: 600; color: var(--accent);
+    background: rgba(229,255,0,0.08); border: 1px solid rgba(229,255,0,0.45); border-radius: 999px;
+    padding: 9px 18px; white-space: nowrap; text-align: center;
+  }
+  /* Four qualifiers (".duel-slide .duel .duel-center .chip"), not three: the
+     generic ".multi-reveal [data-stage].show" below is ALSO 3 selectors
+     (0,3,0) and, being declared later, silently won the tie once "show" was
+     added — resetting this chip's transform to a bare "scale(1)" with NO
+     translate, which snapped it to its box's top-left corner instead of
+     centering it (the "features aren't aligned" bug). One more qualifier
+     safely outranks it regardless of source order. No "scale" anywhere here,
+     in either state: the chip never pops or shrinks, so its border never
+     looks like it's changing size — only opacity (the generic rule) and
+     position (translate) ever animate. */
+  .duel-slide .duel .duel-center .chip { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+  /* align-items:center on .duel-wins (not a stretched width here) keeps this
+     identical in size to its center-stage self, so appendChild() never causes
+     a sudden width snap the instant a chip lands — that snap was the other
+     half of the "border changes size" symptom, separate from the scale-pop. */
+  .duel-wins .chip { position: static; }
+  .duel .chip.flying { transition: transform 0.85s cubic-bezier(.45,0,.2,1); }
 
   /* Reveal-on-click slides: any [data-stage] element starts hidden and pops in
      when the Coach/presenter clicks next/→/space — staged by JS (see advance()).
-     Used here for each grid row (stages 1-5) and the "They fit." line (stage 6). */
+     Used here for each duel chip (odd stages = appear, even stages = land under
+     the winner, see data-win-stage) and the "They fit." line (stage 11). */
   .multi-reveal [data-stage] {
     opacity: 0; transform: scale(0.85);
-    transition: opacity 0.25s ease, transform 0.25s cubic-bezier(.34,1.56,.64,1);
+    transition: opacity 0.5s ease, transform 0.5s cubic-bezier(.34,1.3,.64,1);
   }
   .multi-reveal [data-stage].show { opacity: 1; transform: scale(1); }
-  .fit-line { margin-top: 34px; font-size: 30px; font-weight: 700; }
+  /* Centered in .duel-center (same absolute-center pattern as .duel-center
+     .chip above), which is exactly where the chips were and whose height
+     matches the portraits' — so "They fit." lands in the middle, vertically
+     level with the images, title-sized instead of caption-sized. */
+  .fit-line {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(0.85);
+    font-size: 52px; font-weight: 800; letter-spacing: -0.01em; white-space: nowrap;
+  }
+  /* Full ancestor chain (5 classes total: .duel-slide, .duel, .duel-center,
+     .fit-line, .show) decisively outranks the generic
+     ".multi-reveal [data-stage].show" above instead of merely tying with it
+     (both would otherwise be 0,3,0, leaving the winner down to declaration
+     order alone — which is fragile and, per the identical chip bug fixed
+     above, not something to trust across rendering engines). */
+  .duel-slide .duel .duel-center .fit-line.show { transform: translate(-50%, -50%) scale(1); }
   .fit-line .accent { color: var(--accent); }
 
   /* Must-have slides */
@@ -236,33 +308,37 @@
   <!-- 2b — Opening: who + what -->
   <section class="slide">
     <h1>Haim <span class="accent">Moscovici</span></h1>
-    <div class="desc">Over 8 year analytics experience, 6 of them in WSC Sports</div>
-    <img class="qr-img" src="linkedin-qr.png" alt="LinkedIn QR code">
+    <div class="bio-row">
+      <ul class="desc bio-list">
+        <li><b>Data Analytics Tech Lead</b> · <span class="accent">8+</span> years in Analytics, <span class="accent">6</span> at <span class="accent">WSC Sports</span></li>
+        <li>Lead the new <span class="accent">HTML-based Dashboards</span> framework</li>
+        <li>Lead the <span class="accent">Data Agent</span> infrastructure</li>
+      </ul>
+      <img class="qr-img" src="linkedin-qr.png" alt="LinkedIn QR code">
+    </div>
   </section>
 
   <!-- 3 — Beat 1 hand-off -->
   <section class="slide">
-    <h1>We've all met <span class="accent">dashboards</span> like this.</h1>
+    <h1>"How many <span class="accent">Sales</span> we had in <span class="accent">California</span> during <span class="accent">September 2026</span>?"</h1>
   </section>
 
-  <!-- 3b — Live demo: Superstore Executive Dashboard (embedded) -->
-  <section class="slide dashboard-slide">
+  <!-- 3b — Live demo: Superstore Executive Dashboard (embedded). Scripted click-forward:
+       data-demo-max stages 11 presenter clicks through the dashboard's own filter +
+       controls (State dropdown -> California -> date picker -> Sep 2026 range -> Apply -> date picker -> This Year -> Apply ->
+       Month granularity -> Profit -> Orders) via postMessage into
+       the iframe (see advance() / the dash-demo-step listener in demo/dashboard.html)
+       before the 10th click moves on to the next slide. -->
+  <section class="slide dashboard-slide" data-demo-stage="0" data-demo-max="11">
     <div class="dash-frame">
       <iframe class="dash-iframe" src="demo/dashboard.html" title="Superstore Executive Dashboard" loading="lazy"></iframe>
     </div>
   </section>
 
-  <!-- 4 — Thesis -->
-  <section class="slide">
-    <div class="thesis-lines">
-      <div class="l1">A good dashboard raises<br><span class="accent">follow-up questions</span></div>
-      <div class="l2">sometime it can answer them by itself, but sometimes it can't</div>
-    </div>
-  </section>
-
   <!-- 5 — Beat 2: the two exits -->
   <section class="slide">
-    <h1>"Who's gonna answer the<br><span class="accent">follow-up question</span>?"</h1>
+    <h1>"What drove <span class="accent">Sales</span> and <span class="accent">Orders</span> up while <span class="accent">Profit</span> lagged?"</h1>
+    <div class="desc">California | September 2026</div>
   </section>
 
   <!-- 5b — The Analyst (portrait) -->
@@ -282,37 +358,44 @@
     <h1>"Why not just work<br>with <span class="accent">an agent</span>?"</h1>
   </section>
 
-  <!-- 7 — Beat 3: the comparison grid — each row appears on its own click, top
-       to bottom (winner side enlarged + highlighted, loser side dim), then one
-       more click reveals "They fit." below the grid. -->
-  <section class="slide multi-reveal" data-stage="0" data-max-stage="6">
+  <!-- 7 — Beat 3: the duel. Dashboard portrait left, Agent portrait right. Each
+       feature takes two clicks: click 1 shows the feature chip in the middle,
+       click 2 flies it under the winner's portrait (data-win-stage / data-winner).
+       After the 5 features, one more click reveals "They fit." (stage 11). -->
+  <section class="slide multi-reveal duel-slide" data-stage="0" data-max-stage="11">
     <h1>Because they're <span class="accent">not competing</span>.</h1>
-    <div class="jig-grid">
-      <div class="head dash">Dashboard</div>
-      <div class="head feature">Feature</div>
-      <div class="head agent">Agent</div>
-
-      <div class="side dash win" data-stage="1">multiple answers in a glance</div>
-      <div class="feature-label" data-stage="1">Speed of a first look</div>
-      <div class="side agent lose" data-stage="1">empty canvas</div>
-
-      <div class="side dash lose rule" data-stage="2">finite amount of questions</div>
-      <div class="feature-label rule" data-stage="2">Flexibility &amp; agility</div>
-      <div class="side agent win rule" data-stage="2">Adaptable workflows</div>
-
-      <div class="side dash win rule" data-stage="3">Single source of truth</div>
-      <div class="feature-label rule" data-stage="3">Shared truth</div>
-      <div class="side agent lose rule" data-stage="3">Siloed perspectives</div>
-
-      <div class="side dash lose rule" data-stage="4">Static format</div>
-      <div class="feature-label rule" data-stage="4">Presentation</div>
-      <div class="side agent win rule" data-stage="4">Dynamic &amp; polished</div>
-
-      <div class="side dash win rule" data-stage="5">100% deterministic</div>
-      <div class="feature-label rule" data-stage="5">Trust</div>
-      <div class="side agent lose rule" data-stage="5">fundamentally stochastic</div>
+    <div class="duel">
+      <div class="duel-side dash">
+        <div class="duel-portrait">
+          <div class="duel-name">Dashboard</div>
+          <div class="duel-img-wrap" data-missing="dashboard.png (add it next to presentation.html)">
+            <img src="dashboard.png" alt="The Dashboard" onerror="this.parentElement.classList.add('missing')">
+          </div>
+        </div>
+        <div class="duel-wins" data-side="dash"></div>
+      </div>
+      <div class="duel-center">
+        <div class="chip" data-stage="1" data-win-stage="2" data-winner="dash">High Information Density</div>
+        <div class="chip" data-stage="3" data-win-stage="4" data-winner="agent">Flexibility &amp; Agility</div>
+        <div class="chip" data-stage="5" data-win-stage="6" data-winner="dash">Single Source of Truth</div>
+        <div class="chip" data-stage="7" data-win-stage="8" data-winner="agent">Presentation</div>
+        <div class="chip" data-stage="9" data-win-stage="10" data-winner="dash">Trust</div>
+        <!-- Lands in the same center slot the chips vacate, not spanning the
+             whole row — see .fit-line CSS: that keeps it clear of the portraits
+             while still landing vertically level with them (duel-center's
+             height matches .duel-img-wrap's). -->
+        <div class="fit-line" data-stage="11">They <span class="accent">fit</span>.</div>
+      </div>
+      <div class="duel-side agent">
+        <div class="duel-portrait">
+          <div class="duel-name">Agent</div>
+          <div class="duel-img-wrap" data-missing="agent2.png (add it next to presentation.html)">
+            <img src="agent2.png" alt="The Agent" onerror="this.parentElement.classList.add('missing')">
+          </div>
+        </div>
+        <div class="duel-wins" data-side="agent"></div>
+      </div>
     </div>
-    <div class="fit-line" data-stage="6">They <span class="accent">fit</span>.</div>
   </section>
 
   <!-- 9 — Beat 4 hand-off (moved ahead of the former Beat 3 landing slide,
@@ -324,8 +407,13 @@
   <!-- 9b — Live demo: same Superstore Overview, now with the embedded Sidekick rail
        (demo/dashboard-agent.html) — added 2026-10-05, same embed pattern as slide 5
        (dashboard-slide / dash-frame / scaled iframe), see the CSS comment above
-       .dash-frame for why it's a scale rather than a responsive reflow. -->
-  <section class="slide dashboard-slide">
+       .dash-frame for why it's a scale rather than a responsive reflow. This slide
+       boots straight into its fixed starting view (This Year + Month granularity +
+       California — set on load inside dashboard-agent.html, not click-staged), then
+       click-forward stages just 2 presenter actions: open the Sidekick rail, ask the
+       pre-seeded question (data-demo-max; see advance() / go() and the dash-demo-step
+       listener in demo/dashboard-agent.html). -->
+  <section class="slide dashboard-slide" data-demo-stage="0" data-demo-max="2">
     <div class="dash-frame">
       <iframe class="dash-iframe" src="demo/dashboard-agent.html" title="Superstore Executive Dashboard with embedded Sidekick" loading="lazy"></iframe>
     </div>
@@ -369,7 +457,7 @@
   <!-- 18 — Closing: the stance (title only, decided 2026-10-04). Spoken script in
        narrative-arc.md, Section 6. -->
   <section class="slide">
-    <h1>Like any other thing in the AI era,<br>dashboards need to <span class="accent">adapt and upgrade</span>.</h1>
+    <h1>Like everything else in the AI era,<br>dashboards must <span class="accent">evolve and adapt</span>.</h1>
   </section>
 
 </div>
@@ -401,7 +489,18 @@
     pips[i].classList.add('active');
     counter.textContent = (i + 1) + ' / ' + slides.length;
     syncArrows();
-    if (slides[i].classList.contains('dashboard-slide')) fitDashboard();
+    if (slides[i].classList.contains('dashboard-slide')) {
+      fitDashboard();
+      // Jumping (or re-)landing on a staged demo slide resets its click-forward
+      // progress and reloads the embedded dashboard, so the scripted sequence
+      // always replays from the default (unfiltered) state — same "starts fresh
+      // on a jump" rule as the reveal-slide / multi-reveal patterns below.
+      if (slides[i].dataset.demoMax) {
+        slides[i].dataset.demoStage = '0';
+        const iframe = slides[i].querySelector('.dash-iframe');
+        if (iframe) iframe.src = iframe.getAttribute('src').split('?')[0] + '?t=' + Date.now();
+      }
+    }
     // Every slide arrived at via a jump (not the in-place reveal step below)
     // starts fresh, so the "Best Practices" stamp replays each time.
     if (slides[i].classList.contains('reveal-slide')) slides[i].classList.remove('revealed');
@@ -410,6 +509,7 @@
     if (slides[i].classList.contains('multi-reveal')) {
       slides[i].dataset.stage = '0';
       slides[i].querySelectorAll('[data-stage]').forEach((el) => el.classList.remove('show'));
+      resetDuel(slides[i]);
     }
   }
 
@@ -427,11 +527,64 @@
       if (stage < max) {
         const nextStage = stage + 1;
         cur.dataset.stage = String(nextStage);
-        cur.querySelectorAll('[data-stage="' + nextStage + '"]').forEach((el) => el.classList.add('show'));
+        cur.querySelectorAll('[data-stage="' + nextStage + '"]').forEach((el) => { forceReflow(el); el.classList.add('show'); });
+        cur.querySelectorAll('[data-win-stage="' + nextStage + '"]').forEach((el) => placeChip(cur, el));
+        return;
+      }
+    }
+    if (cur.dataset.demoMax) {
+      const stage = parseInt(cur.dataset.demoStage || '0', 10);
+      const max = parseInt(cur.dataset.demoMax, 10);
+      if (stage < max) {
+        const nextStage = stage + 1;
+        cur.dataset.demoStage = String(nextStage);
+        const iframe = cur.querySelector('.dash-iframe');
+        if (iframe && iframe.contentWindow) {
+          iframe.contentWindow.postMessage({ type: 'dash-demo-step', step: nextStage }, '*');
+        }
         return;
       }
     }
     go(i + 1);
+  }
+
+  /* Duel slide helpers (slide 11). placeChip() moves a feature chip from the
+     center into the winner's stack with a FLIP animation: measure where it is,
+     move it in the DOM, measure where it landed, then animate the difference. */
+  function placeChip(slide, chip) {
+    const target = slide.querySelector('.duel-wins[data-side="' + chip.dataset.winner + '"]');
+    if (!target || chip.parentElement === target) return;
+    const first = chip.getBoundingClientRect();
+    target.appendChild(chip);
+    const last = chip.getBoundingClientRect();
+    const dx = first.left - last.left, dy = first.top - last.top;
+    chip.style.transition = 'none';
+    chip.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+    chip.getBoundingClientRect(); // force layout
+    chip.classList.add('flying');
+    chip.style.transition = '';
+    chip.style.transform = '';
+    chip.addEventListener('transitionend', () => chip.classList.remove('flying'), { once: true });
+  }
+  function resetDuel(slide) {
+    const center = slide.querySelector('.duel-center');
+    if (!center) return;
+    const chips = Array.from(slide.querySelectorAll('.chip'))
+      .sort((x, y) => parseInt(x.dataset.stage, 10) - parseInt(y.dataset.stage, 10));
+    chips.forEach((c) => { c.classList.remove('flying'); c.style.transform = ''; c.style.transition = ''; center.appendChild(c); });
+  }
+  /* Some rendering engines cache a stale transform/style value across a CSS
+     transition triggered by a class toggle, and won't recompute it until
+     something forces a hard reflow — an inline display:none/display:grid (or
+     whatever the element's own display already is) round-trip, never actually
+     painted, so no visible flicker. Used on every staged [data-stage] reveal
+     (chips, "They fit.") so the reveal's real end position/size always
+     applies, not a stale pre-transition value. */
+  function forceReflow(el) {
+    const prev = el.style.display;
+    el.style.display = 'none';
+    void el.offsetHeight;
+    el.style.display = prev;
   }
 
   /* Scale the embedded dashboard (fixed 1800x930 intrinsic size) as one unit to
@@ -465,6 +618,19 @@
     if (e.key === 'Home') go(0);
     if (e.key === 'End') go(slides.length - 1);
   });
+
+  /* Mouse-wheel / trackpad navigation: one scroll gesture = one step. A single
+     physical scroll (especially trackpad momentum) fires many 'wheel' events in
+     quick succession, so a lock debounces it down to exactly one advance()/go()
+     per gesture instead of flying through several slides. Small deltas (sub-pixel
+     trackpad jitter) are ignored outright. */
+  let wheelLocked = false;
+  document.addEventListener('wheel', (e) => {
+    if (wheelLocked || Math.abs(e.deltaY) < 10) return;
+    wheelLocked = true;
+    if (e.deltaY > 0) advance(); else go(i - 1);
+    setTimeout(() => { wheelLocked = false; }, 700);
+  }, { passive: true });
   const prevBtn = document.getElementById('prev');
   const nextBtn = document.getElementById('next');
   prevBtn.addEventListener('click', () => go(i - 1));
