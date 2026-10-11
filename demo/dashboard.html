@@ -359,7 +359,7 @@ function createDatePicker({ mountId, minDate, maxDate, onApply }) {
       '<div class="dp-shortcut" data-days="30">Last 30 days</div>' +
       '<div class="dp-shortcut" data-days="month">This month</div>' +
       '<div class="dp-shortcut" data-days="year">This year</div>' +
-      '<div class="dp-shortcut" data-days="custom">All data</div>' +
+      '<div class="dp-shortcut" data-days="custom">Custom range</div>' +
     '</div><div class="dp-cal">' +
       '<div class="dp-nav"><button class="dp-nav-btn" id="dp-prev-btn"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.41 16.09l-4.58-4.59 4.58-4.59L14 5.5l-6 6 6 6z"/></svg></button>' +
       '<span class="dp-month-label" id="dp-month-label"></span>' +
@@ -447,7 +447,7 @@ function createDatePicker({ mountId, minDate, maxDate, onApply }) {
       const t = new Date(todayStr + 'T00:00:00');
       wrap.querySelectorAll('.dp-shortcut').forEach(x => x.classList.remove('active'));
       sc.classList.add('active');
-      if (days === 'custom') { dpFrom = minDate; dpTo = maxDate; }
+      if (days === 'custom') { /* keep the current range; the user picks the dates in the calendar */ }
       else if (days === '0') { dpFrom = dpTo = fmt(t); }
       else if (days === '1') { const y = new Date(t); y.setDate(t.getDate() - 1); dpFrom = dpTo = fmt(y); }
       else if (days === 'month') { dpFrom = `${t.getFullYear()}-${pad(t.getMonth() + 1)}-01`; dpTo = fmt(t); }
@@ -878,7 +878,7 @@ renderAll();
    dashboard) stages one action per click-forward via postMessage — postMessage
    works across the file:// origin boundary even though direct cross-frame DOM
    access does not. Each step replays one real user action: open the State
-   dropdown → California → open the date picker → This Year → Apply → Month
+   dropdown → California → open the date picker → Jan 1 – Sep 30 → Apply → Month
    granularity → open the September tooltip → Profit → Orders. Driven through
    the same DOM elements + event handlers a real click would hit, so it
    exercises the exact same code paths. ── */
@@ -896,7 +896,7 @@ function demoStepSelectCalifornia() {
   if (applyBtn && !applyBtn.disabled) applyBtn.click();
 }
 // Picker is already open: navigate to September and pick Sep 1 -> Sep 30 of the
-// effective year (Apply is its own step, like the This Year flow)
+// effective year (Apply is its own step, like the Jan 1 – Sep 30 flow)
 function demoStepPickSeptemberRange() {
   const year = EFFECTIVE_MAX_DATE.slice(0, 4);
   const label = document.getElementById('dp-month-label');
@@ -909,7 +909,18 @@ function demoStepPickSeptemberRange() {
   const last = day('30'); if (last) last.click();
 }
 function demoStepOpenDatePicker() { const el = document.getElementById('dp-trigger'); if (el) el.click(); }
-function demoStepPickThisYear() { const el = document.querySelector('.dp-shortcut[data-days="year"]'); if (el) el.click(); }
+// Picker is already open (it reopens on the applied Sep range): go back to January
+// and pick Jan 1 -> Sep 30 of the effective year (Apply is its own step)
+function demoStepPickJanToSep() {
+  const year = EFFECTIVE_MAX_DATE.slice(0, 4);
+  const label = document.getElementById('dp-month-label');
+  const prev = document.getElementById('dp-prev-btn');
+  const next = document.getElementById('dp-next-btn');
+  for (let i = 0; i < 24 && label && prev && label.textContent !== 'January ' + year; i++) prev.click();
+  const jan1 = document.querySelector(`#dp-grid .dp-day[data-date="${year}-01-01"]`); if (jan1) jan1.click();
+  for (let i = 0; i < 24 && label && next && label.textContent !== 'September ' + year; i++) next.click();
+  const sep30 = document.querySelector(`#dp-grid .dp-day[data-date="${year}-09-30"]`); if (sep30) sep30.click();
+}
 function demoStepApplyDateRange() { const el = document.getElementById('dp-apply-btn'); if (el && !el.disabled) el.click(); }
 function demoStepPickMonthGranularity() { const el = document.querySelector('#gran-toggle button[data-gran="month"]'); if (el) el.click(); }
 function demoStepOpenSeptemberTooltip() {
@@ -936,7 +947,7 @@ const DEMO_STEPS = [
   demoStepPickSeptemberRange,
   demoStepApplyDateRange,
   demoStepOpenDatePicker,
-  demoStepPickThisYear,
+  demoStepPickJanToSep,
   demoStepApplyDateRange,
   demoStepPickMonthGranularity,
   demoStepPickProfit,

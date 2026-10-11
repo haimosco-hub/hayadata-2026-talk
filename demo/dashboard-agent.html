@@ -172,7 +172,7 @@
      "stuttering". Height is NEVER part of either class: min-height: 100vh always
      holds, so the collapsed rail stays a full-height grey column, not a short tab. */
   .agent-rail {
-    flex: 0 0 380px; min-height: 100vh; position: sticky; top: 0; overflow: hidden;
+    flex: 0 0 570px; min-height: 100vh; position: sticky; top: 0; overflow: hidden;
     background: var(--overlay); border-left: 1px solid var(--border-subtle);
     display: flex; flex-direction: column;
     transition: flex-basis .32s cubic-bezier(.4,0,.2,1);
@@ -181,9 +181,9 @@
   .agent-rail.narrow .rail-body, .agent-rail.narrow .rail-head-text { display: none; }
 
   .rail-head { display: flex; align-items: center; gap: 10px; padding: 16px 16px 12px; border-bottom: 1px solid var(--border-subtle); }
-  .rail-head .chat-avatar.agent { width: 28px; height: 28px; font-size: 13px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .rail-head .chat-avatar.agent { width: 28px; height: 28px; font-size: 15px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
   .rail-head-text { flex: 1; min-width: 0; }
-  .rail-title { font-size: 15px; font-weight: 700; color: var(--text-primary); line-height: 1.2; white-space: nowrap; }
+  .rail-title { font-size: 18px; font-weight: 700; color: var(--text-primary); line-height: 1.2; white-space: nowrap; }
   .rail-toggle { background: none; border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); width: 28px; height: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
   .rail-toggle:hover { color: var(--text-primary); border-color: var(--text-disabled); }
   .rail-toggle svg { width: 14px; height: 14px; transition: transform .25s ease; }
@@ -195,16 +195,16 @@
   /* the thread (answers render here) — squeezed: capped so the composer below gets the room */
   .rail-thread { flex: 0 1 auto; padding: 8px 16px; display: flex; flex-direction: column; gap: 10px; }
   .rail-thread .chat-msg { margin-bottom: 0; }
-  .rail-thread .chat-bubble { font-size: 13px; }
+  .rail-thread .chat-bubble { font-size: 18px; line-height: 1.5; }
   .rail-thread .chat-bubble.question { white-space: pre-wrap; }
   .rail-thread .chat-bubble p + p { margin-top: 8px; }
-  .rail-thread .chat-bubble ul { padding-left: 16px; margin-top: 6px; }
+  .rail-thread .chat-bubble ul, .rail-thread .chat-bubble ol { padding-left: 16px; margin-top: 6px; }
   .rail-thread .chat-bubble li { margin: 3px 0; }
   .rail-thread .chat-bubble .num { color: var(--accent); font-weight: 600; }
   .rail-thread .chat-bubble .neg { color: var(--error); font-weight: 600; }
-  .rail-ctx-line { font-size: 11px; color: var(--text-muted); margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
+  .rail-ctx-line { font-size: 13px; color: var(--text-muted); margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
   .rail-ctx-line span { background: var(--nested); border-radius: 3px; padding: 1px 6px; }
-  .rail-empty { color: var(--text-disabled); font-size: 13px; line-height: 1.5; padding: 8px 2px; }
+  .rail-empty { color: var(--text-disabled); font-size: 16px; line-height: 1.5; padding: 8px 2px; }
   .rail-empty b { color: var(--text-secondary); }
   .typing { display: inline-flex; gap: 4px; align-items: center; height: 14px; }
   .typing i { width: 5px; height: 5px; border-radius: 50%; background: var(--text-disabled); animation: tp 1.1s infinite ease-in-out; }
@@ -215,24 +215,24 @@
      this is the dominant area of the rail; the thread above is capped to make room for it */
   .rail-composer { flex: 0 0 auto; padding: 18px 16px 20px; border-top: 1px solid var(--border-subtle); background: var(--overlay); }
   .rail-composer .ask-suggest { margin-bottom: 14px; gap: 8px; }
-  .rail-composer .ask-suggest button { font-size: 13px; padding: 8px 14px; }
+  .rail-composer .ask-suggest button { font-size: 15px; padding: 8px 14px; }
   .rail-prompt-wrap { position: relative; }
   .rail-prompt {
     width: 100%; min-height: 280px; max-height: 480px; resize: vertical;
     background: var(--nested); border: 1px solid var(--border); border-radius: 8px;
     padding: 14px 14px 48px; color: var(--text-primary); font-family: var(--font);
-    font-size: 14px; line-height: 1.6; outline: none; transition: border-color .15s;
+    font-size: 16px; line-height: 1.6; outline: none; transition: border-color .15s;
   }
   .rail-prompt:focus { border-color: var(--accent); }
   .rail-prompt::placeholder { color: var(--text-disabled); }
   .rail-prompt-actions { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 6px; align-items: center; }
-  .rail-hint { font-size: 11px; color: var(--text-muted); margin-right: 4px; }
-  .rail-reset { background: none; border: 1px solid var(--border-subtle); border-radius: 6px; color: var(--text-disabled); font-family: var(--font); font-size: 12px; padding: 6px 10px; cursor: pointer; }
+  .rail-hint { font-size: 13px; color: var(--text-muted); margin-right: 4px; }
+  .rail-reset { background: none; border: 1px solid var(--border-subtle); border-radius: 6px; color: var(--text-disabled); font-family: var(--font); font-size: 14px; padding: 6px 10px; cursor: pointer; }
   .rail-reset:hover { color: var(--text-primary); border-color: var(--border); }
-  .rail-send { height: 34px; padding: 0 16px; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+  .rail-send { height: 34px; padding: 0 16px; font-size: 16px; display: flex; align-items: center; gap: 6px; }
   .rail-send svg { width: 14px; height: 14px; }
 
-  @media (max-width: 1280px) { .agent-rail { flex-basis: 320px; width: 320px; } }
+  @media (max-width: 1280px) { .agent-rail { flex-basis: 480px; width: 480px; } }
 </style>
 </head>
 <body>
@@ -501,7 +501,7 @@ function createDatePicker({ mountId, minDate, maxDate, onApply }) {
       '<div class="dp-shortcut" data-days="30">Last 30 days</div>' +
       '<div class="dp-shortcut" data-days="month">This month</div>' +
       '<div class="dp-shortcut" data-days="year">This year</div>' +
-      '<div class="dp-shortcut" data-days="custom">All data</div>' +
+      '<div class="dp-shortcut" data-days="custom">Custom range</div>' +
     '</div><div class="dp-cal">' +
       '<div class="dp-nav"><button class="dp-nav-btn" id="dp-prev-btn"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.41 16.09l-4.58-4.59 4.58-4.59L14 5.5l-6 6 6 6z"/></svg></button>' +
       '<span class="dp-month-label" id="dp-month-label"></span>' +
@@ -589,7 +589,7 @@ function createDatePicker({ mountId, minDate, maxDate, onApply }) {
       const t = new Date(todayStr + 'T00:00:00');
       wrap.querySelectorAll('.dp-shortcut').forEach(x => x.classList.remove('active'));
       sc.classList.add('active');
-      if (days === 'custom') { dpFrom = minDate; dpTo = maxDate; }
+      if (days === 'custom') { /* keep the current range; the user picks the dates in the calendar */ }
       else if (days === '0') { dpFrom = dpTo = fmt(t); }
       else if (days === '1') { const y = new Date(t); y.setDate(t.getDate() - 1); dpFrom = dpTo = fmt(y); }
       else if (days === 'month') { dpFrom = `${t.getFullYear()}-${pad(t.getMonth() + 1)}-01`; dpTo = fmt(t); }
@@ -1275,6 +1275,24 @@ ${subList}
 <p><b>Bottom line:</b> a volume surge, but much of it was discounted ${weakName} sold at or below cost — so sales climbed sharply while profit barely moved.</p>`;
 }
 
+/* Authored answer for the scripted demo flow (California + September): a fixed
+   narrative rather than the generic analyzeMonthMarginGap() computation below,
+   so the talk always tells the same specific story. Dollar figures carry the
+   same num()/neg highlight convention as every other answer in this file —
+   .num (accent) for a figure on its own, .neg (error-red) for a loss — just
+   applied to literal text here since the exact displayed figures (e.g. "$1.50")
+   are hand-picked rather than run through fmtFull()'s rounding. */
+function septemberProfitLagAnswer() {
+  return `<p><b>Why profit lagged:</b></p>
+<ol>
+<li>Furniture drove the growth, at near-zero margin. Furniture sales jumped from <span class="num">$2.3K</span> to <span class="num">$8.7K</span> but earned only <span class="num">$582</span> (6.7% margin). Tables made <span class="num">$3.3K</span> in sales for <span class="num">$1.50</span> profit. Chairs made <span class="num">$3.9K</span> for <span class="num">$279</span>.</li>
+<li>Discounting spiked. Discounted lines carried 73% of September sales (<span class="num">$13.8K</span>) versus 43% in August. Nearly all Furniture sold at 20% off, and 4 of those lines lost money (worst: a <span class="num">$1,322</span> conference table at <span class="neg">-$99</span>).</li>
+<li>The high-margin mix shrank. Office Supplies, at 35% margin, fell from <span class="num">$9.1K</span> to <span class="num">$7.3K</span>. Appliances alone dropped from <span class="num">$5.1K</span> to <span class="num">$0.8K</span>.</li>
+<li>Shipping mix hurt. Second Class sales grew to <span class="num">$4.9K</span> at only 8.5% margin, versus 24.5% on Standard Class.</li>
+</ol>
+<p>In short: September added about <span class="num">$4.3K</span> of mostly discounted Furniture sales, which contributed almost no profit, while the profitable Office Supplies business declined.</p>`;
+}
+
 function mockAnswer(question, items) {
   const rows = filteredRows();
   const q = question.toLowerCase();
@@ -1284,6 +1302,7 @@ function mockAnswer(question, items) {
 
   const monthIdx = MONTH_FULL.findIndex(mn => q.includes(mn.toLowerCase()));
   if (monthIdx !== -1 && /profit|margin/.test(q) && /sales|orders?/.test(q) && /reason|why/.test(q)) {
+    if (MONTH_FULL[monthIdx] === 'September') return septemberProfitLagAnswer();
     const dimItems = items.filter(it => it.key !== 'Date range');
     const analysis = analyzeMonthMarginGap(monthIdx + 1, MONTH_FULL[monthIdx]);
     if (analysis) return renderMonthMarginGapAnswer(analysis, dimItems.length > 0);
@@ -1418,9 +1437,58 @@ document.getElementById('rail-toggle').addEventListener('click', () => {
 
 /* ── boot ────────────────────────────────────────────────────────────────── */
 renderAll();
-// renderAll() -> syncAgentContext() already set the context block; drop the demo
-// question in after it so the box is ready to go, nothing left to type.
+
+/* This slide's fixed starting view: Jan 1 – Sep 30 + Month granularity + California,
+   applied immediately on load rather than click-staged (the earlier click-replay
+   of the full filter walk was reverted — see slide 9b's comment in presentation.html).
+   Driven through the same real DOM elements + handlers a user click would hit, so
+   filterState/granularity/the date-picker's committed shortcut all end up exactly
+   as if a presenter had clicked them — the agent rail's context block (built from
+   that same state) comes out right too. ── */
+document.getElementById('dp-trigger').click();
+(() => {
+  // custom range Jan 1 – Sep 30 of the effective year, picked through the real calendar
+  const year = EFFECTIVE_MAX_DATE.slice(0, 4);
+  const label = document.getElementById('dp-month-label');
+  const prev = document.getElementById('dp-prev-btn');
+  const next = document.getElementById('dp-next-btn');
+  const day = d => document.querySelector(`#dp-grid .dp-day[data-date="${year}-${d}"]`);
+  for (let i = 0; i < 24 && label.textContent !== 'January ' + year; i++) prev.click();
+  const first = day('01-01'); if (first) first.click();
+  for (let i = 0; i < 24 && label.textContent !== 'September ' + year; i++) next.click();
+  const last = day('09-30'); if (last) last.click();
+})();
+document.getElementById('dp-apply-btn').click();
+document.querySelector('#gran-toggle button[data-gran="month"]').click();
+document.querySelector('#filter-bar .dd-wrap .dd-btn.filter-dd').click();
+(() => {
+  const panel = document.querySelector('#filter-bar .dd-wrap .dd-panel.open');
+  const item = panel && Array.from(panel.querySelectorAll('.dd-item')).find(d => d.textContent.trim().startsWith('California'));
+  if (item) item.click();
+})();
+document.querySelector('.filter-apply-btn').click(); // commits the State selection; also closes the now-open dropdown (click lands outside .dd-wrap)
+
+// renderAll() -> syncAgentContext() ran again inside the clicks above, so
+// _lastContextBlock already reflects the final (Jan 1 – Sep 30 + California) state —
+// seed the prompt box only now so it is not a run behind.
 promptEl.value = composePrompt(_lastContextBlock, DEFAULT_QUESTION);
+
+/* ── scripted demo steps, driven by the parent deck's "forward" clicks ──────
+   Only two presenter actions left on stage for this slide: open the Sidekick
+   rail, then ask the pre-seeded question. Same postMessage mechanism as
+   demo/dashboard.html's Section 1 embed — the parent deck stages one action
+   per click-forward since direct cross-frame DOM access doesn't survive the
+   file:// origin boundary. ── */
+function demoStepOpenRail() { const el = document.getElementById('rail-toggle'); if (el) el.click(); }
+function demoStepClickAsk() { const el = document.getElementById('rail-send'); if (el) el.click(); }
+
+const DEMO_STEPS = [demoStepOpenRail, demoStepClickAsk];
+window.addEventListener('message', (e) => {
+  const data = e.data;
+  if (!data || data.type !== 'dash-demo-step') return;
+  const step = DEMO_STEPS[data.step - 1];
+  if (step) step();
+});
 </script>
 </body>
 </html>

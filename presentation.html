@@ -374,7 +374,7 @@
 
   <!-- 3b — Live demo: Superstore Executive Dashboard (embedded). Scripted click-forward:
        data-demo-max stages 11 presenter clicks through the dashboard's own filter +
-       controls (State dropdown -> California -> date picker -> Sep 2026 range -> Apply -> date picker -> This Year -> Apply ->
+       controls (State dropdown -> California -> date picker -> Sep 2026 range -> Apply -> date picker -> Jan 1 - Sep 30 -> Apply ->
        Month granularity -> Profit -> Orders) via postMessage into
        the iframe (see advance() / the dash-demo-step listener in demo/dashboard.html)
        before the 10th click moves on to the next slide. -->
@@ -470,7 +470,7 @@
        (demo/dashboard-agent.html) — added 2026-10-05, same embed pattern as slide 5
        (dashboard-slide / dash-frame / scaled iframe), see the CSS comment above
        .dash-frame for why it's a scale rather than a responsive reflow. This slide
-       boots straight into its fixed starting view (This Year + Month granularity +
+       boots straight into its fixed starting view (Jan 1 - Sep 30 + Month granularity +
        California — set on load inside dashboard-agent.html, not click-staged), then
        click-forward stages just 2 presenter actions: open the Sidekick rail, ask the
        pre-seeded question (data-demo-max; see advance() / go() and the dash-demo-step
