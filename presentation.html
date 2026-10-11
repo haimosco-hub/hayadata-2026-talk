@@ -21,7 +21,7 @@
   spoken, not written.
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Caveat:wght@700&display=swap" rel="stylesheet">
 <style>
   :root {
     --canvas: #010101;
@@ -93,15 +93,24 @@
     margin-top: 26px; font-size: 20px; font-weight: 400; color: var(--text-secondary);
     max-width: 760px; line-height: 1.55;
   }
-  .slide .bio-row { display: flex; align-items: center; justify-content: center; gap: 32px; width: 100%; max-width: 1100px; }
+  .slide .bio-row { display: flex; align-items: center; justify-content: center; gap: 64px; width: 100%; max-width: 1100px; }
   .slide .bio-list { list-style: disc; padding-left: 28px; text-align: left; margin-top: 26px; color: var(--text-primary); font-size: 26px; max-width: 950px; }
-  .slide .bio-row .qr-img { margin-top: 26px; flex-shrink: 0; }
+  .bio-text { text-align: left; }
+  .bio-text h1 { text-align: left; }
+  .bio-photo { width: 360px; height: 360px; border-radius: 50%; object-fit: cover; border: 7px solid var(--accent); flex-shrink: 0; }
   .slide .bio-list li { margin-top: 10px; }
   .slide .bio-list li::marker { color: var(--accent); }
   .slide .desc b { color: var(--text-primary); font-weight: 600; }
   .slide .desc .accent { color: var(--accent); }
 
   /* LinkedIn QR embed (who-I-am slide) */
+  .thanks-row { display: flex; align-items: center; justify-content: center; gap: 160px; width: 100%; }
+  .slide h1.thanks-title { font-size: 150px; line-height: 1.02; text-align: left; max-width: none; }
+  .thanks-qr-col { display: flex; flex-direction: column; align-items: center; gap: 28px; }
+  .qr-img.thanks-qr { max-height: 320px; margin-top: 0; border-radius: 14px; }
+  .thanks-connect { font-size: 40px; font-weight: 700; display: flex; align-items: center; gap: 16px; }
+  .connect-icon { width: 48px; height: 48px; color: var(--accent); flex-shrink: 0; }
+  .thanks-connect .accent { color: var(--accent); }
   .qr-img { margin-top: 28px; max-height: 110px; width: auto; height: auto; border-radius: 8px; }
 
   .slide .handoff {
@@ -253,6 +262,44 @@
   .duel-slide .duel .duel-center .fit-line.show { transform: translate(-50%, -50%) scale(1); }
   .fit-line .accent { color: var(--accent); }
 
+  /* Analyst + Agent pair slide: bullets in the duel's center column */
+  .duel-name .accent { color: var(--accent); }
+  .pair-slide { padding: 80px 40px; }
+  .pair-slide .duel { max-width: 1300px; grid-template-columns: 440px 340px 440px; padding-top: 72px; }
+  .pair-slide .duel-img-wrap { width: 440px; height: 308px; }
+  .pair-slide .duel-center { height: 308px; }
+  .pair-slide .duel-name { font-size: 44px; margin-bottom: 20px; }
+  .pair-list { list-style: disc; padding-left: 26px; text-align: left; font-size: 30px; font-weight: 600; line-height: 1.3; }
+  .pair-list li { margin: 16px 0; }
+  .pair-list li::marker, .pair-list .accent { color: var(--accent); }
+
+  /* Practices slide: on the click, "Best" gets a yellow strikethrough and a
+     handwritten "Our" is written in above it (left-to-right wipe). Staged by .revealed. */
+  .practices-slide .pr-head { position: relative; margin: 70px 0 70px; }
+  .practices-slide .pr-best { position: relative; display: inline-block; transition: color 0.4s ease 0.1s; }
+  .practices-slide .pr-best::after {
+    content: ''; position: absolute; left: -6px; top: 54%; height: 6px; width: calc(100% + 12px);
+    background: var(--accent); border-radius: 3px; transform: scaleX(0); transform-origin: left center;
+    transition: transform 0.55s cubic-bezier(.6,0,.3,1) 0.1s;
+  }
+  .practices-slide.revealed .pr-best { color: var(--text-disabled); }
+  .practices-slide.revealed .pr-best::after { transform: scaleX(1); }
+  .practices-slide .pr-hand {
+    position: absolute; bottom: 100%; left: 50%; margin-bottom: -4px; white-space: nowrap;
+    font-family: 'Caveat', 'Segoe Script', cursive; font-weight: 700; font-size: 84px; line-height: 1;
+    color: var(--accent); transform: translateX(-50%) rotate(-5deg);
+    clip-path: inset(-10% 100% -10% 0);
+    transition: clip-path 0.8s cubic-bezier(.5,0,.4,1) 0.75s;
+  }
+  .practices-slide.revealed .pr-hand { clip-path: inset(-10% -2% -10% 0); }
+
+  /* ALT must-haves: yellow tiles, dark icons, white labels below */
+  .mh-tiles { display: flex; gap: 110px; justify-content: center; }
+  .mh-tile { display: flex; flex-direction: column; align-items: center; gap: 40px; }
+  .mh-tile-box { width: 200px; height: 200px; border-radius: 38px; background: var(--accent); color: #010101; display: flex; align-items: center; justify-content: center; }
+  .mh-tile-box .mh-icon { width: 110px; height: 110px; color: #010101; }
+  .mh-tile-name { font-size: 40px; font-weight: 800; color: var(--text-primary); }
+
   /* Must-have slides */
   .mh-badge {
     width: 64px; height: 64px; border-radius: 50%; border: 2px solid var(--accent);
@@ -288,7 +335,7 @@
 
 <div class="chrome">
   <span class="talk-name">Dashboards Aren't Dying, They're Getting a Sidekick</span>
-  <span class="counter" id="counter">1 / 19</span>
+  <span class="counter" id="counter"></span>
 </div>
 
 <div class="deck" id="deck">
@@ -307,14 +354,16 @@
 
   <!-- 2b — Opening: who + what -->
   <section class="slide">
-    <h1>Haim <span class="accent">Moscovici</span></h1>
     <div class="bio-row">
+      <img class="bio-photo" src="haim.png" alt="Haim Moscovici">
+      <div class="bio-text">
+      <h1>Haim <span class="accent">Moscovici</span></h1>
       <ul class="desc bio-list">
-        <li><b>Data Analytics Tech Lead</b> · <span class="accent">8+</span> years in Analytics, <span class="accent">6</span> at <span class="accent">WSC Sports</span></li>
-        <li>Lead the new <span class="accent">HTML-based Dashboards</span> framework</li>
-        <li>Lead the <span class="accent">Data Agent</span> infrastructure</li>
+        <li><span class="accent">8</span> years in <span class="accent">Data &amp; Analytics</span></li>
+        <li><span class="accent">6</span> years as a <span class="accent">Tech Lead</span> @ <span class="accent">WSC Sports</span></li>
+        <li>Lead <span class="accent">Data-related AI</span> initiatives</li>
       </ul>
-      <img class="qr-img" src="linkedin-qr.png" alt="LinkedIn QR code">
+      </div>
     </div>
   </section>
 
@@ -341,21 +390,34 @@
     <div class="desc">California | September 2026</div>
   </section>
 
-  <!-- 5b — The Analyst (portrait) -->
-  <section class="slide">
-    <h1>The <span class="accent">Analyst</span></h1>
-    <img class="portrait-img" src="analyst.jpg" alt="The Analyst">
-  </section>
-
-  <!-- 5c — The Agent (portrait) -->
-  <section class="slide">
-    <h1>The <span class="accent">Agent</span></h1>
-    <img class="portrait-img" src="agent.jpg" alt="The Agent">
+  <!-- 5b — The Analyst and The Agent, side by side (merged from two portrait
+       slides), same layout as the duel slide with the two costs in the middle. -->
+  <section class="slide pair-slide">
+    <div class="duel">
+      <div class="duel-side">
+        <div class="duel-portrait">
+          <div class="duel-name">The <span class="accent">Analyst</span></div>
+          <div class="duel-img-wrap"><img src="analyst.jpg" alt="The Analyst"></div>
+        </div>
+      </div>
+      <div class="duel-center">
+        <ul class="pair-list">
+          <li>Breaks the <span class="accent">workflow</span></li>
+          <li>Need to add <span class="accent">context</span> manually</li>
+        </ul>
+      </div>
+      <div class="duel-side">
+        <div class="duel-portrait">
+          <div class="duel-name">The <span class="accent">Agent</span></div>
+          <div class="duel-img-wrap"><img src="agent.jpg" alt="The Agent"></div>
+        </div>
+      </div>
+    </div>
   </section>
 
   <!-- 6 — Beat 3 opener: steelman -->
   <section class="slide">
-    <h1>"Why not just work<br>with <span class="accent">an agent</span>?"</h1>
+    <h1>"Can't the <span class="accent">agent</span><br>just <span class="accent">replace</span> it?"</h1>
   </section>
 
   <!-- 7 — Beat 3: the duel. Dashboard portrait left, Agent portrait right. Each
@@ -367,7 +429,7 @@
     <div class="duel">
       <div class="duel-side dash">
         <div class="duel-portrait">
-          <div class="duel-name">Dashboard</div>
+          <div class="duel-name">The <span class="accent">Dashboard</span></div>
           <div class="duel-img-wrap" data-missing="dashboard.png (add it next to presentation.html)">
             <img src="dashboard.png" alt="The Dashboard" onerror="this.parentElement.classList.add('missing')">
           </div>
@@ -388,7 +450,7 @@
       </div>
       <div class="duel-side agent">
         <div class="duel-portrait">
-          <div class="duel-name">Agent</div>
+          <div class="duel-name">The <span class="accent">Agent</span></div>
           <div class="duel-img-wrap" data-missing="agent2.png (add it next to presentation.html)">
             <img src="agent2.png" alt="The Agent" onerror="this.parentElement.classList.add('missing')">
           </div>
@@ -425,39 +487,56 @@
     <div class="desc">same time frame, same filters</div>
   </section>
 
-  <!-- 10 — Beat 5 frame: "Best Practices" struck through + X'd on the next
-       click/arrow/space, then the desc fades in — see the .reveal-slide JS. -->
-  <section class="slide reveal-slide">
-    <h1><span class="bp-text">Best <span class="accent">practices</span></span><span class="bp-stamp">Not Yet</span></h1>
-    <div class="desc bp-desc">Just <span class="bp-hl">3</span> things you <span class="bp-hl">can't</span> skip.</div>
-  </section>
-
-  <!-- 11 — Must-have: grounding -->
-  <section class="slide">
-    <div class="mh-badge">1</div>
-    <h1>Grounding</h1>
-    <div class="desc">The agent inherits the report's query and definitions.<br>It does not infer its own.</div>
-  </section>
-
-  <!-- 12 — Must-have: trust -->
-  <section class="slide">
-    <div class="mh-badge">2</div>
-    <h1>Trust</h1>
-    <div class="desc">Monitor and evaluate the agent responses</div>
-  </section>
-
-  <!-- 13 — Must-have: permissions -->
-  <section class="slide">
-    <div class="mh-badge">3</div>
-    <h1>Permissions</h1>
-    <div class="desc">Only relevant tables &nbsp;·&nbsp; Row-Level security</div>
+  <!-- 11-13 — The three must-haves merged into one slide: yellow rounded tiles,
+       dark icons, white labels underneath (no descriptions yet). -->
+  <section class="slide reveal-slide multi-reveal practices-slide" data-stage="0" data-max-stage="3">
+    <div class="pr-head">
+      <h1><span class="pr-best">Best<span class="pr-hand">Our</span></span> <span class="accent">practices</span></h1>
+    </div>
+    <div class="mh-tiles">
+      <div class="mh-tile" data-stage="1">
+        <div class="mh-tile-box"><svg class="mh-icon" viewBox="0 0 64 64" aria-hidden="true">
+          <circle cx="32" cy="8" r="5" fill="none" stroke="currentColor" stroke-width="3.5"/>
+          <rect x="29.5" y="12" width="5" height="45" fill="currentColor"/>
+          <rect x="19" y="19" width="26" height="4.5" rx="2.25" fill="currentColor"/>
+          <path d="M8 37C9 50 21 57 32 57S55 50 56 37" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+          <polygon points="4.2,24.5 1.3,39 14.7,35" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+          <polygon points="59.8,24.5 62.7,39 49.3,35" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+          <path d="M29.5 12.5C21 20 24 29 33 35S46 47 44 54" fill="none" stroke="var(--accent)" stroke-width="8" stroke-linecap="round"/>
+          <path d="M29.5 12.5C21 20 24 29 33 35S46 47 44 54" fill="none" stroke="currentColor" stroke-width="4" stroke-dasharray="3.2 2.4"/>
+        </svg></div>
+        <div class="mh-tile-name">Grounding</div>
+      </div>
+      <div class="mh-tile" data-stage="2">
+        <div class="mh-tile-box"><svg class="mh-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.3 8.3-8 9-4.7-.7-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg></div>
+        <div class="mh-tile-name">Trust</div>
+      </div>
+      <div class="mh-tile" data-stage="3">
+        <div class="mh-tile-box"><svg class="mh-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/><circle cx="12" cy="16" r="1.2" fill="currentColor"/></svg></div>
+        <div class="mh-tile-name">Permissions</div>
+      </div>
+    </div>
   </section>
 
 
   <!-- 18 — Closing: the stance (title only, decided 2026-10-04). Spoken script in
        narrative-arc.md, Section 6. -->
   <section class="slide">
-    <h1>Like everything else in the AI era,<br>dashboards must <span class="accent">evolve and adapt</span>.</h1>
+    <h1>Like everything else in the <span class="accent">AI</span> era,<br><span class="accent">dashboards</span> must <span class="accent">evolve</span> and <span class="accent">adapt</span>.</h1>
+  </section>
+
+  <!-- Thank you + connect -->
+  <section class="slide">
+    <div class="thanks-row">
+      <h1 class="thanks-title">Thank<br><span class="accent">You.</span></h1>
+      <div class="thanks-qr-col">
+        <img class="qr-img thanks-qr" src="linkedin-qr.png" alt="LinkedIn QR code">
+        <div class="thanks-connect">
+          <svg class="connect-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.6"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="M19 8v6M16 11h6"/></svg>
+          <span>in/haim-<span class="accent">moscovici</span></span>
+        </div>
+      </div>
+    </div>
   </section>
 
 </div>
@@ -640,6 +719,7 @@
     nextBtn.classList.toggle('disabled', i === slides.length - 1);
   }
   syncArrows();
+  counter.textContent = (i + 1) + ' / ' + slides.length;
   if (slides[i].classList.contains('dashboard-slide')) fitDashboard();
 </script>
 </body>
