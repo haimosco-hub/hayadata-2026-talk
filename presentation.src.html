@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboards Aren't Dying, They're Getting a Sidekick</title>
+<!--
+  hayaData 2026 — main slide deck (draft 4 arc, 2026-10-04; opening added 2026-09-08;
+  dashboard slide embedded 2026-09-28; closing decided 2026-10-04; Sidekick dashboard
+  slide embedded 2026-10-05).
+  Lean by design: one title + one short description per slide. The talk itself is spoken;
+  this deck is a spine, not a script. The "broken" flow (Section 1) is the Superstore
+  Executive Overview embedded directly at slide 5 via iframe onto demo/dashboard.html and
+  clicked live inside the deck — demo/demo-broken.html is retired from the talk. The "fixed"
+  flow (Section 4) now hands off the same way: slide 13 embeds demo/dashboard-agent.html
+  (the same Overview, plus the embedded Sidekick rail) between "Same dashboard. Sidekick
+  added." and "The dashboard becomes the context that feeds the agent" — demo-fixed.html
+  is retired from the talk too. Both dashboard slides share one .dashboard-slide /
+  .dash-frame / .dash-iframe pattern (looked up by class, not id — see fitDashboard()).
+  Closing: one title-only stance slide, then the thesis slide again; "Ask the dashboard" is
+  spoken, not written.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Caveat:wght@700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --canvas: #010101;
+    --card: #282828;
+    --nested: #1e1e1e;
+    --border-subtle: #333;
+    --accent: #e5ff00;
+    --text-primary: #f0f0f0;
+    --text-secondary: #bababa;
+    --text-disabled: #8e8e8e;
+    --text-muted: #5d5d5d;
+    --error: #ff3131;
+    --success: #00b27c;
+    --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--canvas); color: var(--text-primary); font-family: var(--font);
+    overflow: hidden; -webkit-font-smoothing: antialiased;
+  }
+
+  .chrome {
+    position: fixed; top: 0; left: 0; right: 0; padding: 20px 40px;
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 12px; color: var(--text-muted); z-index: 5; pointer-events: none;
+  }
+  .chrome .talk-name { letter-spacing: 0.02em; }
+  .chrome .counter { font-variant-numeric: tabular-nums; }
+
+  .deck { height: 100%; width: 100%; position: relative; }
+  .slide {
+    position: absolute; inset: 0;
+    display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    padding: 80px 120px; text-align: center;
+  }
+  .slide.active { display: flex; }
+
+  .slide h1 {
+    font-size: 52px; font-weight: 800; line-height: 1.15; letter-spacing: -0.01em;
+    max-width: 980px;
+  }
+  .slide h1 .accent { color: var(--accent); }
+  .slide h1 .dim { color: var(--text-disabled); }
+
+  /* "Best practices" reveal slide: a click/→/space stamps "NOT YET" over the
+     title, then fades the desc in — staged by .revealed (see JS). */
+  .reveal-slide h1 { position: relative; }
+  .reveal-slide .bp-text { position: relative; display: inline-block; }
+  .reveal-slide .bp-stamp {
+    position: absolute; top: 50%; left: 50%; white-space: nowrap; pointer-events: none;
+    background: rgba(1,1,1,0.88);
+    border: 5px solid var(--error); border-radius: 10px; color: var(--error);
+    font-size: 36px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 10px 28px; opacity: 0;
+    transform: translate(-50%, -50%) rotate(-9deg) scale(0.6);
+    transition: opacity 0.25s ease 0.3s, transform 0.3s cubic-bezier(.34,1.56,.64,1) 0.3s;
+  }
+  .reveal-slide.revealed .bp-stamp { opacity: 1; transform: translate(-50%, -50%) rotate(-9deg) scale(1); }
+  .reveal-slide .bp-desc {
+    opacity: 0; transform: translateY(10px);
+    transition: opacity 0.3s ease 0.55s, transform 0.3s ease 0.55s;
+  }
+  .reveal-slide.revealed .bp-desc { opacity: 1; transform: translateY(0); }
+  .bp-desc .bp-hl { color: var(--accent); font-weight: 600; }
+
+  /* Title slide byline + logos */
+  .title-byline { margin-top: 44px; }
+  .byline-name { font-size: 36px; font-weight: 700; }
+  .byline-name .accent { color: var(--accent); }
+  .byline-role { margin-top: 6px; font-size: 20px; color: var(--text-secondary); }
+  .logo-row { margin-top: 48px; display: flex; align-items: center; justify-content: center; gap: 44px; }
+  .logo-row img { display: block; }
+  .logo-wsc { height: 52px; width: auto; }
+  .logo-haya { height: 52px; width: auto; }
+    .logo-divider { width: 2px; height: 48px; background: var(--border-subtle); }
+
+  .slide .desc {
+    margin-top: 26px; font-size: 20px; font-weight: 400; color: var(--text-secondary);
+    max-width: 760px; line-height: 1.55;
+  }
+  /* Hook slide: the punchline is click-revealed and sized up to carry the slide. */
+  .hook-slide .desc { margin-top: 56px; font-size: min(48px, 3vw); font-weight: 700; color: var(--text-primary); max-width: 1100px; line-height: 1.25; }
+  .slide .bio-row { display: flex; align-items: center; justify-content: center; gap: 64px; width: 100%; max-width: 1100px; }
+  .slide .bio-list { list-style: disc; padding-left: 28px; text-align: left; margin-top: 26px; color: var(--text-primary); font-size: 26px; max-width: 950px; }
+  .bio-text { text-align: left; }
+  .bio-text h1 { text-align: left; }
+  .bio-photo { width: 360px; height: 360px; border-radius: 50%; object-fit: cover; border: 7px solid var(--accent); flex-shrink: 0; }
+  .slide .bio-list li { margin-top: 10px; }
+  .slide .bio-list li::marker { color: var(--accent); }
+  .slide .bio-sublist { list-style: circle; padding-left: 28px; margin-top: 4px; font-size: 22px; color: var(--text-secondary, var(--text-primary)); }
+  .slide .bio-sublist li { margin-top: 6px; }
+  .slide .desc b { color: var(--text-primary); font-weight: 600; }
+  .slide .desc .accent { color: var(--accent); }
+
+  /* LinkedIn QR embed (who-I-am slide) */
+  /* sized in vw (capped at the big-screen sizes) so nothing wraps on a laptop */
+  .thanks-row { display: flex; align-items: center; justify-content: center; gap: min(160px, 7vw); width: 100%; }
+  .slide h1.thanks-title { font-size: min(150px, 9vw); line-height: 1.02; text-align: left; max-width: none; }
+  .thanks-qr-col { display: flex; flex-direction: column; align-items: center; gap: 28px; }
+  .qr-img.thanks-qr { max-height: min(320px, 22vw); margin-top: 0; border-radius: 14px; }
+  .thanks-connect { font-size: min(40px, 2.6vw); font-weight: 700; display: flex; align-items: center; gap: 16px; white-space: nowrap; }
+  .connect-icon { width: 1.2em; height: 1.2em; color: var(--accent); flex-shrink: 0; }
+  .thanks-connect .accent { color: var(--accent); }
+  .qr-img { margin-top: 28px; max-height: 110px; width: auto; height: auto; border-radius: 8px; }
+
+  .slide .handoff {
+    margin-top: 34px; display: inline-flex; align-items: center; gap: 10px;
+    font-size: 14px; color: var(--accent); background: rgba(229,255,0,0.08);
+    border: 1px solid rgba(229,255,0,0.35); border-radius: 999px; padding: 8px 18px;
+    font-weight: 600;
+  }
+
+  .placeholder-tag {
+    margin-top: 28px; font-size: 13px; color: var(--text-muted); font-style: italic;
+  }
+
+  /* Portrait slides (The Analyst / The Agent) — same centered layout as every
+     other slide (title + content centered as one block); image kept small so
+     the title lands at the same vertical spot as a title + desc slide. */
+  .portrait-img { margin-top: 30px; max-height: 260px; max-width: 460px; width: auto; height: auto; }
+
+  /* Thesis slide */
+  .thesis-lines { display: flex; flex-direction: column; gap: 14px; max-width: 880px; }
+  .thesis-lines .l1 { font-size: 40px; font-weight: 700; line-height: 1.3; }
+  .thesis-lines .l2 { font-size: 24px; font-weight: 400; color: var(--text-secondary); line-height: 1.5; }
+  .thesis-lines .l3 { font-size: 30px; font-weight: 700; color: var(--accent); line-height: 1.4; margin-top: 10px; }
+  .thesis-lines .accent { color: var(--accent); }
+
+  /* Dashboard slide — the embedded live demo (iframe onto demo/dashboard.html).
+     The dashboard's own layout is fixed-height content (chart-box is a hard 260px in
+     the shared theme), so instead of letting it scroll inside the slide, the iframe is
+     rendered at its natural single-row-filter size (1800x930 — narrower and the filter
+     pills wrap to a second row, taller than needed and it's just wasted space) and then
+     scaled as one unit to fit whatever the slide's box turns out to be. */
+  .slide.dashboard-slide { padding: 76px 96px 64px; }
+  .dash-frame {
+    width: 100%; height: 100%; border-radius: 12px; overflow: hidden;
+    background: #010101; position: relative;
+  }
+  .dash-frame iframe {
+    position: absolute; width: 1800px; height: 930px; border: none;
+    transform-origin: top left;
+  }
+
+  /* Two-exits slide */
+  .exits-row { display: flex; gap: 32px; margin-top: 36px; }
+  .exit-box { background: var(--card); border-radius: 12px; padding: 26px 30px; width: 300px; text-align: left; }
+  .exit-box .exit-name { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+  .exit-box .exit-cost { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
+  .exit-box.time .exit-cost { color: var(--error); }
+  .exit-box.context .exit-cost { color: var(--error); }
+  .exit-box p { font-size: 14px; color: var(--text-secondary); line-height: 1.5; }
+
+  /* Duel slide (slide 11): Dashboard portrait on the left, Agent portrait on the
+     right, and a feature chip that appears in the middle on one click, then on
+     the next click flies under the winner's portrait and stacks there (FLIP
+     animation in placeChip()). Replaces the earlier three-column table. */
+  /* Fixed-width columns (not 1fr), sized to the content itself (320px image,
+     260px for the longest chip/fit-line text) with justify-content:center
+     keeping the whole group centered in the slide: 1fr side columns on a
+     100%-wide container were auto-expanding past the image's own size, and
+     centering the image WITHIN that wider column (align-items:center on
+     .duel-side) quietly added its own margin on top of the gap — so shrinking
+     only the center track barely moved the portraits together at all. */
+  .duel {
+    position: relative; margin-top: 30px; padding-top: 48px; width: 100%; max-width: 1100px;
+    display: grid; grid-template-columns: 320px 216px 320px; column-gap: 2px;
+    justify-content: center; align-items: start;
+  }
+  .duel-side { display: flex; flex-direction: column; align-items: center; }
+  /* Holds the name label and the image together, but the label is positioned
+     absolutely (see .duel-name) so it floats above the image WITHOUT adding
+     to this wrapper's layout height — .duel-portrait's box stays exactly the
+     image's own size, which is what keeps it vertically aligned with
+     .duel-center (the chips / "They fit.") further down. */
+  .duel-portrait { position: relative; }
+  .duel-img-wrap {
+    width: 320px; height: 224px; border-radius: 12px; overflow: hidden;
+    background: var(--canvas); display: flex; align-items: center; justify-content: center;
+  }
+  /* contain, not cover: these portraits (a monitor, a standing figure) are
+     taller/narrower than the box, so cover cropped their top/bottom off.
+     contain shows the whole image, letterboxed into the pure-black box. */
+  .duel-img-wrap img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .duel-img-wrap.missing img { display: none; }
+  .duel-img-wrap.missing::after {
+    content: attr(data-missing); font-size: 13px; color: var(--text-muted); font-style: italic;
+  }
+  .duel-name {
+    position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+    margin-bottom: 14px; font-size: 26px; font-weight: 800; white-space: nowrap;
+  }
+  /* Fixed height (not min-height), sized for the max chips that land on one
+     side (3) with a little slack — so a side filling up never grows the grid
+     row and shifts the whole vertically-centered slide (what "min-height"
+     let happen before: growing content pushed the title upward on clicks).
+     align-items: center (not stretch, flex's column default) keeps a landed
+     chip at its own natural width — see .duel-wins .chip below for why that
+     matters. */
+  .duel-wins { margin-top: 14px; display: flex; flex-direction: row; justify-content: center; align-items: center; gap: 14px; height: 80px; width: 260px; }
+  .duel-center { position: relative; height: 224px; display: flex; align-items: center; justify-content: center; }
+  /* Chips already look like their landed ("win") state from the moment they
+     appear in the center — accent color, accent border/background, fixed
+     size — so the click-to-land animation only MOVES the chip. Nothing about
+     its color, border or size changes at any point; it just travels. */
+  /* Feature tile (same look as the best-practices tiles): yellow rounded box with a
+     dark icon. The title hangs BELOW the tile (absolute, so it never changes the
+     tile's box and the FLIP flight stays clean) and fades out once the tile lands. */
+  .chip { position: relative; }
+  .ctile { width: 72px; height: 72px; border-radius: 17px; background: var(--accent); color: #010101; display: flex; align-items: center; justify-content: center; flex: none; }
+  .ctile .ci { width: 58%; height: 58%; }
+  .cname { position: absolute; top: calc(100% + 10px); left: 50%; transform: translateX(-50%); font-size: 18px; font-weight: 800; color: var(--text-primary); white-space: nowrap; transition: opacity 1.5s ease; }
+  .chip.landed .cname { opacity: 0; }
+  /* Four qualifiers (".duel-slide .duel .duel-center .chip"), not three: the
+     generic ".multi-reveal [data-stage].show" below is ALSO 3 selectors
+     (0,3,0) and, being declared later, silently won the tie once "show" was
+     added — resetting this chip's transform to a bare "scale(1)" with NO
+     translate, which snapped it to its box's top-left corner instead of
+     centering it (the "features aren't aligned" bug). One more qualifier
+     safely outranks it regardless of source order. No "scale" anywhere here,
+     in either state: the chip never pops or shrinks, so its border never
+     looks like it's changing size — only opacity (the generic rule) and
+     position (translate) ever animate. */
+  .duel-slide .duel .duel-center .chip { position: absolute; left: 50%; top: 50%; margin-top: -14px; transform: translate(-50%, -50%); }
+  /* align-items:center on .duel-wins (not a stretched width here) keeps this
+     identical in size to its center-stage self, so appendChild() never causes
+     a sudden width snap the instant a chip lands — that snap was the other
+     half of the "border changes size" symptom, separate from the scale-pop. */
+  .duel-wins .chip { position: relative; }
+  .duel-wins[data-side="agent"] { flex-direction: row-reverse; }
+  .duel .chip.flying { transition: transform 0.85s cubic-bezier(.45,0,.2,1); }
+  /* Stepping BACK replays the earlier stages instantly (no fades / flights) */
+  .slide.instant, .slide.instant * { transition: none !important; animation: none !important; }
+
+  /* Reveal-on-click slides: any [data-stage] element starts hidden and pops in
+     when the Coach/presenter clicks next/→/space — staged by JS (see advance()).
+     Used here for each duel chip (odd stages = appear, even stages = land under
+     the winner, see data-win-stage) and the "They fit." line (stage 11). */
+  .multi-reveal [data-stage] {
+    opacity: 0; transform: scale(0.85);
+    transition: opacity 0.5s ease, transform 0.5s cubic-bezier(.34,1.3,.64,1);
+  }
+  .multi-reveal [data-stage].show { opacity: 1; transform: scale(1); }
+  /* Centered in .duel-center (same absolute-center pattern as .duel-center
+     .chip above), which is exactly where the chips were and whose height
+     matches the portraits' — so "They fit." lands in the middle, vertically
+     level with the images, title-sized instead of caption-sized. */
+  .fit-line {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(0.85);
+    font-size: 52px; font-weight: 800; letter-spacing: -0.01em; white-space: nowrap;
+  }
+  /* Full ancestor chain (5 classes total: .duel-slide, .duel, .duel-center,
+     .fit-line, .show) decisively outranks the generic
+     ".multi-reveal [data-stage].show" above instead of merely tying with it
+     (both would otherwise be 0,3,0, leaving the winner down to declaration
+     order alone — which is fragile and, per the identical chip bug fixed
+     above, not something to trust across rendering engines). */
+  .duel-slide .duel .duel-center .fit-line.show { transform: translate(-50%, -50%) scale(1); }
+  .fit-line .accent { color: var(--accent); }
+  /* "They're not competing." is wiped last-letter-first (eraseLetters), then
+     "They fit!" types into the SAME line: .fit-title overlays line 1 and the
+     ::after keeps a reserved second line so the slide layout never shifts. */
+  .duel-slide h1 { position: relative; }
+  .pre-title .pch.off { visibility: hidden; }
+  .fit-title { display: block; position: absolute; top: 0; left: 0; right: 0; }
+  /* typed in letter by letter by typeFitTitle() (JS); the span itself never fades */
+  .multi-reveal .fit-title[data-stage] { opacity: 1; transform: none; transition: none; }
+  .fit-title .ch { visibility: hidden; }
+  .fit-title .ch.on { visibility: visible; }
+  .fit-title .accent { color: var(--accent); }
+  /* Stage 13: the portraits fade away (outranks the generic .show opacity) and
+     the merged image + category list fades in over the same area. */
+  .duel-slide[data-stage="11"] .duel .duel-side.show {
+    opacity: 0; transition: opacity 1.8s ease-in 0.2s, transform 2s ease-in-out;
+  }
+  .duel-slide[data-stage="11"] .duel .duel-side.dash.show { transform: translateX(269px); }
+  .duel-slide[data-stage="11"] .duel .duel-side.agent.show { transform: translateX(-269px); }
+  .multi-reveal .duel-final[data-stage] { transition: opacity 2.6s ease 2.5s; transform: none; }
+  .duel-final {
+    position: absolute; left: 0; right: 0; top: 30px; bottom: 0;
+    display: flex; align-items: center; justify-content: center; gap: 56px;
+  }
+  .duel-final img { width: 480px; height: 358px; object-fit: cover; border-radius: 12px; display: block; }
+  .final-img { display: flex; flex-direction: column; align-items: center; gap: 20px; }
+  /* same title treatment as the Analyst / Agent slide (.pair-slide .duel-name) */
+  .final-title { font-size: min(44px, 2.7vw); font-weight: 800; white-space: nowrap; text-align: center; }
+  .final-title .accent { color: var(--accent); }
+  .final-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; align-items: flex-start; }
+  .final-chip { display: flex; align-items: center; gap: 18px; font-size: 28px; font-weight: 800; color: var(--text-primary); white-space: nowrap; }
+  .final-chip .ctile { width: 68px; height: 68px; border-radius: 16px; }
+
+  /* Analyst + Agent pair slide: bullets in the duel's center column */
+  .duel-name .accent { color: var(--accent); }
+  /* portrait titles on the duel slide match the Analyst / Agent slide */
+  .duel-slide .duel { padding-top: 72px; }
+  .duel-slide .duel-name { font-size: min(44px, 2.7vw); margin-bottom: 20px; }
+  /* Sized in vw (capped at the big-screen sizes) so the slide shrinks with the
+     window instead of overflowing on a laptop. */
+  .pair-slide { padding: 80px 40px; --pw: min(440px, 24vw); }
+  .pair-slide .duel { max-width: 1400px; grid-template-columns: var(--pw) min(440px, 27vw) var(--pw); column-gap: min(16px, 1vw); padding-top: 72px; }
+  .pair-slide .duel-img-wrap { width: var(--pw); height: calc(var(--pw) * 0.7); }
+  .pair-slide .duel-center { height: calc(var(--pw) * 0.7); }
+  .pair-slide .duel-name { font-size: min(44px, 2.7vw); margin-bottom: 20px; }
+  /* Two yellow icon tiles stacked in the center column, label under each icon.
+     Same tile look as the practices slide, scaled down to fit the portraits' height. */
+  .pair-tiles { display: flex; flex-direction: column; align-items: center; gap: min(40px, 2.8vw); }
+  .pair-tiles .mh-tile { gap: min(8px, 0.6vw); }
+  .pair-tiles .mh-tile-box { width: min(92px, 5.6vw); height: min(92px, 5.6vw); border-radius: min(22px, 1.4vw); }
+  .pair-tiles .mh-tile-box .mh-icon { width: 58%; height: 58%; }
+  .pair-tiles .mh-tile-name { font-size: min(24px, 1.5vw); font-weight: 700; white-space: nowrap; text-align: center; }
+  .pair-tiles .mh-tile-name .accent { color: var(--text-primary); }
+  .pair-tiles .mh-tile-name .neg { color: var(--error); }
+  .pair-list { list-style: disc; padding-left: 26px; text-align: left; font-size: min(28px, 1.7vw); font-weight: 600; line-height: 1.3; white-space: nowrap; }
+  .pair-list li { margin: 16px 0; }
+  .pair-list li::marker, .pair-list .accent { color: var(--text-primary); }
+  .pair-list .neg { color: var(--error); }
+
+  /* Practices slide: on the click, "Best" gets a yellow strikethrough and a
+     handwritten "Our" is written in above it (left-to-right wipe). Staged by .revealed. */
+  .practices-slide { padding-bottom: 266px; }
+  .practices-slide .pr-head { position: relative; margin: 70px 0 70px; }
+  .practices-slide .pr-best { position: relative; display: inline-block; transition: color 0.4s ease 0.1s; }
+  .practices-slide .pr-best::after {
+    content: ''; position: absolute; left: -6px; top: 54%; height: 6px; width: calc(100% + 12px);
+    background: var(--accent); border-radius: 3px; transform: scaleX(0); transform-origin: left center;
+    transition: transform 0.55s cubic-bezier(.6,0,.3,1) 0.1s;
+  }
+  .practices-slide.revealed .pr-best { color: var(--text-disabled); }
+  .practices-slide.revealed .pr-best::after { transform: scaleX(1); }
+  .practices-slide .pr-hand {
+    position: absolute; bottom: 100%; left: 50%; margin-bottom: -4px; white-space: nowrap;
+    font-family: 'Caveat', 'Segoe Script', cursive; font-weight: 700; font-size: 84px; line-height: 1;
+    color: var(--accent); transform: translateX(-50%) rotate(-5deg);
+    clip-path: inset(-10% 100% -10% 0);
+    transition: clip-path 0.8s cubic-bezier(.5,0,.4,1) 0.75s;
+  }
+  .practices-slide.revealed .pr-hand { clip-path: inset(-10% -2% -10% 0); }
+
+  /* ALT must-haves: yellow tiles, dark icons, white labels below */
+  .mh-tiles { display: flex; gap: 90px; justify-content: center; }
+  .mh-tile { display: flex; flex-direction: column; align-items: center; gap: 30px; }
+  .mh-tile-box { width: 160px; height: 160px; border-radius: 30px; background: var(--accent); color: #010101; display: flex; align-items: center; justify-content: center; }
+  .mh-tile-box .mh-icon { width: 88px; height: 88px; color: #010101; }
+  .mh-tile-name { font-size: 34px; font-weight: 800; color: var(--text-primary); }
+
+  /* Slide 12 — Analytics Hub status: three blocks (Live / Beta / Next), one per click, then the
+     feedback line. */
+  .st-slide h1 { font-size: min(52px, 3.6vw); }
+  .st-slide { padding-bottom: 150px; }
+  .st-blocks { margin-top: 52px; display: flex; gap: 90px; align-items: flex-start; }
+  .st-block { width: 160px; display: flex; flex-direction: column; align-items: center; gap: 30px; }
+  .st-icon-box {
+    width: 160px; height: 160px; border-radius: 30px; background: var(--accent); color: #010101;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .st-icon-box .st-icon { width: 88px; height: 88px; }
+  .st-word { white-space: nowrap; font-size: 34px; font-weight: 800; line-height: 1; color: var(--text-primary); }
+  .st-lbl .accent, .st-list .accent { color: var(--accent); }
+  .st-lbl { font-size: 22px; font-weight: 700; line-height: 1.3; width: max-content; white-space: nowrap; text-align: center; }
+  .st-list { width: max-content; list-style: disc; text-align: left; padding-left: 22px; font-size: 22px; font-weight: 700; line-height: 1.4; }
+  .st-list li::marker { color: var(--accent); }
+
+  /* Slide 12 — "How we build the Sidekick": the agent's file tree in a card. Root folder is
+     visible at stage 0; each click reveals one branch (yaml, semantic view, dashboard, skills).
+     Every group is its own monospace <pre> so the box-drawing stems line up row to row. */
+  .ft-slide { padding: 40px 120px; }
+  .ft-slide h1 { margin-bottom: min(28px, 3vh); }
+  .ft-card {
+    background: var(--canvas); border: 2px solid var(--accent); border-radius: 24px;
+    padding: min(30px, 3.4vh) 44px; text-align: left;
+    font-family: 'Cascadia Mono', Consolas, 'SF Mono', Menlo, monospace;
+    font-size: min(24px, 3vh); line-height: 1.5; color: var(--text-primary);
+  }
+  .ft-card pre { font: inherit; margin: 0; white-space: pre; }
+  .ft-card .dir { color: var(--accent); font-weight: 700; }
+  .ft-card .cm { color: var(--text-disabled); }
+  .ft-card .stem { color: var(--text-muted); }
+
+  /* Must-have slides */
+  .mh-badge {
+    width: 64px; height: 64px; border-radius: 50%; border: 2px solid var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 800; color: var(--accent); margin-bottom: 24px;
+  }
+
+  .footer-nav {
+    position: fixed; bottom: 22px; left: 0; right: 0;
+    display: flex; justify-content: center; gap: 8px; z-index: 5;
+  }
+  .footer-nav .pip {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--border-subtle); cursor: pointer;
+  }
+  .footer-nav .pip.active { background: var(--accent); width: 18px; border-radius: 4px; }
+
+  /* Side arrows */
+  .nav-arrow {
+    position: fixed; top: 50%; transform: translateY(-50%);
+    width: 48px; height: 48px; border-radius: 50%;
+    background: var(--card); border: 1px solid var(--border-subtle);
+    color: var(--text-secondary); font-size: 22px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; z-index: 6; user-select: none; transition: color .15s, border-color .15s;
+  }
+  .nav-arrow:hover { color: var(--accent); border-color: var(--accent); }
+  .nav-arrow.prev { left: 28px; }
+  .nav-arrow.next { right: 28px; }
+  .nav-arrow.disabled { opacity: 0.25; pointer-events: none; }
+  /* arrows hidden: the deck is driven by the clicker / keyboard (the elements stay so the JS keeps working) */
+  .nav-arrow { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="chrome">
+  <span class="talk-name">Dashboards Aren't Dying, They're Getting a Sidekick</span>
+  <span class="counter" id="counter"></span>
+</div>
+
+<div class="deck" id="deck">
+
+  <!-- 1 — Title -->
+  <section class="slide active">
+    <h1><span class="accent">Dashboards</span> Aren't Dying,<br>They're Getting a <span class="accent">Sidekick</span></h1>
+    <div class="title-byline">
+      <div class="byline-name">Haim <span class="accent">Moscovici</span></div>
+      <div class="byline-role">Data Analytics Tech Lead</div>
+    </div>
+    <div class="logo-row">
+      <img class="logo-wsc" src="wsc-logo.png" alt="WSC Sports">
+      <span class="logo-divider"></span>
+      <img class="logo-haya" src="hayadata-logo-white.svg" alt="hayaData">
+    </div>
+  </section>
+
+  <!-- 2 — Opening: the hook -->
+  <section class="slide multi-reveal hook-slide" data-stage="0" data-max-stage="1">
+    <h1><span class="accent">80%</span> of the time, you'll open a dashboard with <span class="accent">one question</span> and leave with <span class="accent">two</span>.</h1>
+    <div class="desc" data-stage="1">That's not a <span class="accent">bug</span>. That's a <span class="accent">feature</span>.</div>
+  </section>
+
+  <!-- 2b — Opening: who + what -->
+  <section class="slide">
+    <div class="bio-row">
+      <img class="bio-photo" src="haim.png" alt="Haim Moscovici">
+      <div class="bio-text">
+      <h1>Haim <span class="accent">Moscovici</span></h1>
+      <ul class="desc bio-list">
+        <li><span class="accent">8</span> years in <span class="accent">Data &amp; Analytics</span></li>
+        <li><span class="accent">6</span> years as a <span class="accent">Tech Lead</span> @ <span class="accent">WSC Sports</span></li>
+        <li>Lead <span class="accent">Data-related AI</span> initiatives
+          <ul class="bio-sublist">
+            <li><span class="accent">HTML-based</span> dashboards system</li>
+            <li><span class="accent">Data Agents</span> infra</li>
+          </ul>
+        </li>
+      </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 — Beat 1 hand-off -->
+  <section class="slide">
+    <h1>"How many <span class="accent">Sales</span> we had in <span class="accent">California</span> during <span class="accent">September 2026</span>?"</h1>
+    <div class="desc">Regional Manager | Retail Stores | California</div>
+  </section>
+
+  <!-- 3b — Live demo: Superstore Executive Dashboard (embedded). Scripted click-forward:
+       data-demo-max stages 11 presenter clicks through the dashboard's own filter +
+       controls (State dropdown -> California -> date picker -> Sep 2026 range -> Apply -> date picker -> Jan 1 - Sep 30 -> Apply ->
+       Month granularity -> Profit -> Orders) via postMessage into
+       the iframe (see advance() / the dash-demo-step listener in demo/dashboard.html)
+       before the 10th click moves on to the next slide. -->
+  <section class="slide dashboard-slide" data-demo-stage="0" data-demo-max="11">
+    <div class="dash-frame">
+      <iframe class="dash-iframe" src="demo/dashboard.html" title="Superstore Executive Dashboard"></iframe>
+    </div>
+  </section>
+
+  <!-- 5 — Beat 2: the two exits -->
+  <section class="slide">
+    <h1>"What drove <span class="accent">Sales</span> and <span class="accent">Orders</span> up while <span class="accent">Profit</span> lagged?"</h1>
+    <div class="desc">California | September 2026</div>
+  </section>
+
+  <!-- 5b — The Analyst and The Agent, side by side (merged from two portrait
+       slides), same layout as the duel slide with the two costs in the middle. -->
+  <section class="slide multi-reveal pair-slide" data-stage="0" data-max-stage="4">
+    <div class="duel">
+      <div class="duel-side" data-stage="1">
+        <div class="duel-portrait">
+          <div class="duel-name">The <span class="accent">Analyst</span></div>
+          <div class="duel-img-wrap"><img src="analyst.jpg" alt="The Analyst"></div>
+        </div>
+      </div>
+      <div class="duel-center">
+        <div class="pair-tiles">
+          <div class="mh-tile" data-stage="3">
+            <div class="mh-tile-box"><svg class="mh-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g transform="translate(12 12) scale(1.25) rotate(-45) translate(-12 -12)" stroke-width="1.5"><rect x="1" y="9" width="8" height="6" rx="3"/><path d="M6.5 10.5h3a1.5 1.5 0 0 1 0 3h-3"/><rect x="15" y="9" width="8" height="6" rx="3"/><path d="M17.5 10.5h-3a1.5 1.5 0 0 0 0 3h3"/><path d="M12 8V5.5M9.5 8.5L8 6.5M14.5 8.5L16 6.5"/></g></svg></div>
+            <div class="mh-tile-name"><span class="neg">Breaks</span> the <span class="accent">workflow</span></div>
+          </div>
+          <div class="mh-tile" data-stage="4">
+            <div class="mh-tile-box"><svg class="mh-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 14L3.2 11.2 8.5 8.6 12 10.5M19 14l1.8-2.8-5.3-2.6L12 10.5"/><g transform="translate(6 13.2) scale(0.5 -0.5)" stroke-width="3.4" fill="var(--accent)"><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></g><path d="M5 14L12 10.5 19 14 12 17.5z"/><path d="M5 14v5l7 3.5V17.5M19 14v5l-7 3.5"/></svg></div>
+            <div class="mh-tile-name">Extract <span class="accent">context</span> <span class="neg">manually</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="duel-side" data-stage="2">
+        <div class="duel-portrait">
+          <div class="duel-name">The <span class="accent">Agent</span></div>
+          <div class="duel-img-wrap"><img src="agent.jpg" alt="The Agent"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 — Beat 3 opener: steelman -->
+  <section class="slide">
+    <h1>"Can't the <span class="accent">agent</span><br>just <span class="accent">replace</span> it?"</h1>
+  </section>
+
+  <!-- 7 — Beat 3: the duel. Dashboard portrait left, Agent portrait right. Each
+       feature takes two clicks: click 1 shows the feature chip in the middle,
+       click 2 flies it under the winner's portrait (data-win-stage / data-winner).
+       Click 1 shows the Dashboard, click 2 the Agent, THEN the 4 features (stages
+       3-10), and one more click reveals "They fit." (stage 11: merge, final image and title animation all in one click). -->
+  <section class="slide multi-reveal duel-slide" data-stage="0" data-max-stage="11">
+    <h1><span class="pre-title">They're <span class="accent">not competing</span>.</span><span class="fit-title" data-stage="11"> They <span class="accent">fit</span>!</span></h1>
+    <div class="duel">
+      <div class="duel-side dash" data-stage="1">
+        <div class="duel-portrait">
+          <div class="duel-name">The <span class="accent">Dashboard</span></div>
+          <div class="duel-img-wrap" data-missing="dashboard.png (add it next to presentation.html)">
+            <img src="dashboard.png" alt="The Dashboard" onerror="this.parentElement.classList.add('missing')">
+          </div>
+        </div>
+        <div class="duel-wins" data-side="dash"></div>
+      </div>
+      <div class="duel-center">
+        <div class="chip" data-stage="3" data-win-stage="4" data-winner="dash"><div class="ctile"><svg class="ci" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.3 8.3-8 9-4.7-.7-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg></div><div class="cname">Trust</div></div>
+        <div class="chip" data-stage="5" data-win-stage="6" data-winner="agent"><div class="ctile"><svg class="ci" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22v-5M12 17c0-4-2-5.5-5-5.5M12 17c0-4 2-5.5 5-5.5M12 17V7.5" stroke-width="2.2"/><path d="M12 2l4 5.5H8z" fill="currentColor"/><path d="M2.2 11.5l5-3.6v7.2z" fill="currentColor"/><path d="M21.8 11.5l-5-3.6v7.2z" fill="currentColor"/></svg></div><div class="cname">Flexibility &amp; Agility</div></div>
+        <div class="chip" data-stage="7" data-win-stage="8" data-winner="dash"><div class="ctile"><svg class="ci" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="9" r="4.2" stroke-dasharray="1.9 1.55"  stroke-width="3.4" stroke-linecap="butt"/><circle cx="9" cy="9" r="3.2" stroke-width="1.5"/><path d="M13 21.5v-9.2a1.5 1.5 0 0 1 3 0V16m0-1.5a1.5 1.5 0 0 1 3 0V16m0-.5a1.5 1.5 0 0 1 3 0v3.5c0 1.5-1 2.5-2 2.5h-6.5c-1.7 0-2.5-.8-3.4-1.8l-2-2.2a1.3 1.3 0 0 1 1.9-1.7l1.5 1.4" transform="translate(-1.5 -1)"/></svg></div><div class="cname">Ease of Use</div></div>
+        <div class="chip" data-stage="9" data-win-stage="10" data-winner="agent"><div class="ctile"><svg class="ci" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="8"/><circle cx="10" cy="8" r="2.6"/><path d="M5.2 16c.8-2.4 2.7-3.6 4.8-3.6s4 1.2 4.8 3.6"/><rect x="11" y="13" width="12" height="9" rx="1.8" fill="var(--accent)"/><path d="M13.5 16.2h7M13.5 19.2h7"/><circle cx="16" cy="16.2" r="1" fill="currentColor"/><circle cx="19" cy="19.2" r="1" fill="currentColor"/></svg></div><div class="cname">Personalization</div></div>
+      </div>
+      <div class="duel-side agent" data-stage="2">
+        <div class="duel-portrait">
+          <div class="duel-name">The <span class="accent">Agent</span></div>
+          <div class="duel-img-wrap" data-missing="agent2.png (add it next to presentation.html)">
+            <img src="agent2.png" alt="The Agent" onerror="this.parentElement.classList.add('missing')">
+          </div>
+        </div>
+        <div class="duel-wins" data-side="agent"></div>
+      </div>
+      <!-- Final state (stage 11): both portraits fade out, the hands image fades in
+           on the left with the five categories listed on the right. -->
+      <div class="duel-final" data-stage="11">
+        <div class="final-img">
+          <div class="final-title">The <span class="accent">Agentic</span> Dashboard</div>
+          <img src="dash_agent_hands.jpg" alt="Dashboard and Agent, hand in hand">
+        </div>
+        <ul class="final-list">
+          <li class="final-chip"><div class="ctile"><svg class="ci" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.3 8.3-8 9-4.7-.7-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg></div><span>Trust</span></li>
+          <li class="final-chip"><div class="ctile"><svg class="ci" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22v-5M12 17c0-4-2-5.5-5-5.5M12 17c0-4 2-5.5 5-5.5M12 17V7.5" stroke-width="2.2"/><path d="M12 2l4 5.5H8z" fill="currentColor"/><path d="M2.2 11.5l5-3.6v7.2z" fill="currentColor"/><path d="M21.8 11.5l-5-3.6v7.2z" fill="currentColor"/></svg></div><span>Flexibility &amp; Agility</span></li>
+          <li class="final-chip"><div class="ctile"><svg class="ci" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="9" r="4.2" stroke-dasharray="1.9 1.55"  stroke-width="3.4" stroke-linecap="butt"/><circle cx="9" cy="9" r="3.2" stroke-width="1.5"/><path d="M13 21.5v-9.2a1.5 1.5 0 0 1 3 0V16m0-1.5a1.5 1.5 0 0 1 3 0V16m0-.5a1.5 1.5 0 0 1 3 0v3.5c0 1.5-1 2.5-2 2.5h-6.5c-1.7 0-2.5-.8-3.4-1.8l-2-2.2a1.3 1.3 0 0 1 1.9-1.7l1.5 1.4" transform="translate(-1.5 -1)"/></svg></div><span>Ease of Use</span></li>
+          <li class="final-chip"><div class="ctile"><svg class="ci" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="8"/><circle cx="10" cy="8" r="2.6"/><path d="M5.2 16c.8-2.4 2.7-3.6 4.8-3.6s4 1.2 4.8 3.6"/><rect x="11" y="13" width="12" height="9" rx="1.8" fill="var(--accent)"/><path d="M13.5 16.2h7M13.5 19.2h7"/><circle cx="16" cy="16.2" r="1" fill="currentColor"/><circle cx="19" cy="19.2" r="1" fill="currentColor"/></svg></div><span>Personalization</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9 — Beat 4 hand-off (moved ahead of the former Beat 3 landing slide,
+       2026-10 revision: the sidekick reveal now comes before the reframe). -->
+  <section class="slide">
+    <h1>Same dashboard. <span class="accent">Sidekick added</span>.</h1>
+  </section>
+
+  <!-- 9b — Live demo: same Superstore Overview, now with the embedded Sidekick rail
+       (demo/dashboard-agent.html) — added 2026-10-05, same embed pattern as slide 5
+       (dashboard-slide / dash-frame / scaled iframe), see the CSS comment above
+       .dash-frame for why it's a scale rather than a responsive reflow. This slide
+       boots straight into its fixed starting view (Jan 1 - Sep 30 + Month granularity +
+       California — set on load inside dashboard-agent.html, not click-staged), then
+       click-forward stages 3 presenter actions: open the Sidekick rail, type the
+       question into the prompt, ask it (data-demo-max; see advance() / go() and the dash-demo-step
+       listener in demo/dashboard-agent.html). -->
+  <section class="slide dashboard-slide" data-demo-stage="0" data-demo-max="3">
+    <div class="dash-frame">
+      <iframe class="dash-iframe" src="demo/dashboard-agent.html" title="Superstore Executive Dashboard with embedded Sidekick"></iframe>
+    </div>
+  </section>
+
+  <!-- 12 — How we build the Sidekick (added 2026-10-17): file tree of the agent folder. Illustrative:
+       follows the real agents/<name>/ recipe in the WSC Snowflake repo (cortex_agent.yaml +
+       semantic_views/ + *_skills/*/SKILL.md) with the Superstore dashboard HTML added as context.
+       Click 1 reveals the card + root folder; clicks 2-5 reveal yaml, semantic view, dashboard, skills. -->
+  <section class="slide multi-reveal ft-slide" data-stage="0" data-max-stage="5">
+    <h1>How we <span class="accent">build</span> the Sidekick</h1>
+    <div class="ft-card" data-stage="1">
+<pre><span class="dir">superstore_sidekick/</span></pre>
+<pre data-stage="2"><span class="stem">├── </span>AGENT.md                      <span class="cm"># who it is: instructions, tools, model</span></pre>
+<pre data-stage="3"><span class="stem">├── </span><span class="dir">semantic_views/</span>               <span class="cm"># available datasets</span>
+<span class="stem">│   └── </span>superstore_sv.yaml        <span class="cm"># superstore dataset, verified queries</span></pre>
+<pre data-stage="4"><span class="stem">├── </span><span class="dir">dashboard/</span>                    <span class="cm"># the report it lives on</span>
+<span class="stem">│   └── </span>superstore_overview.html</pre>
+<pre data-stage="5"><span class="stem">└── </span><span class="dir">skills/</span>                       <span class="cm"># how it thinks</span>
+<span class="stem">    ├── </span><span class="dir">data_menu/</span>                <span class="cm"># dimensions and metrics definitions</span>
+<span class="stem">    │   └── </span>SKILL.md
+<span class="stem">    ├── </span><span class="dir">explain_charts/</span>           <span class="cm"># explains what each chart shows</span>
+<span class="stem">    │   └── </span>SKILL.md
+<span class="stem">    └── </span><span class="dir">build_charts/</span>             <span class="cm"># charts match the Hub look</span>
+<span class="stem">        └── </span>SKILL.md</pre>
+    </div>
+  </section>
+
+    <!-- 11-13 — The three must-haves merged into one slide: yellow rounded tiles,
+       dark icons, white labels underneath (no descriptions yet). -->
+  <section class="slide reveal-slide multi-reveal practices-slide" data-stage="0" data-max-stage="3">
+    <div class="pr-head">
+      <h1><span class="pr-best">Best<span class="pr-hand">Our</span></span> <span class="accent">practices</span></h1>
+    </div>
+    <div class="mh-tiles">
+      <div class="mh-tile" data-stage="1">
+        <div class="mh-tile-box"><svg class="mh-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.3 8.3-8 9-4.7-.7-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg></div>
+        <div class="mh-tile-name">Trust</div>
+      </div>
+      <div class="mh-tile" data-stage="2">
+        <div class="mh-tile-box"><svg class="mh-icon" viewBox="0 0 64 64" aria-hidden="true">
+          <circle cx="32" cy="8" r="5" fill="none" stroke="currentColor" stroke-width="3.5"/>
+          <rect x="29.5" y="12" width="5" height="45" fill="currentColor"/>
+          <rect x="19" y="19" width="26" height="4.5" rx="2.25" fill="currentColor"/>
+          <path d="M8 37C9 50 21 57 32 57S55 50 56 37" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+          <polygon points="4.2,24.5 1.3,39 14.7,35" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+          <polygon points="59.8,24.5 62.7,39 49.3,35" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+          <path d="M29.5 12.5C21 20 24 29 33 35S46 47 44 54" fill="none" stroke="var(--accent)" stroke-width="8" stroke-linecap="round"/>
+          <path d="M29.5 12.5C21 20 24 29 33 35S46 47 44 54" fill="none" stroke="currentColor" stroke-width="4" stroke-dasharray="3.2 2.4"/>
+        </svg></div>
+        <div class="mh-tile-name">Anchoring</div>
+      </div>
+      <div class="mh-tile" data-stage="3">
+        <div class="mh-tile-box"><svg class="mh-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/><circle cx="12" cy="16" r="1.2" fill="currentColor"/></svg></div>
+        <div class="mh-tile-name">Permissions</div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- 18 — Closing: the stance (title only, decided 2026-10-04). Spoken script in
+       narrative-arc.md, Section 6. -->
+  <section class="slide">
+    <h1><span class="accent">AI</span> won't kill the <span class="accent">dashboards</span>,<br>it'll make them <span class="accent">evolve</span>.</h1>
+  </section>
+
+  <!-- Thank you + connect -->
+  <section class="slide">
+    <div class="thanks-row">
+      <h1 class="thanks-title">Thank<br><span class="accent">You</span>.</h1>
+      <div class="thanks-qr-col">
+        <img class="qr-img thanks-qr" src="linkedin-qr.png" alt="LinkedIn QR code">
+        <div class="thanks-connect">
+          <svg class="connect-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.6"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="M19 8v6M16 11h6"/></svg>
+          <span>in/haim-<span class="accent">moscovici</span></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<div class="footer-nav" id="pips"></div>
+<div class="nav-arrow prev" id="prev" title="Previous">&#8592;</div>
+<div class="nav-arrow next" id="next" title="Next">&#8594;</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  const counter = document.getElementById('counter');
+  const pipsEl = document.getElementById('pips');
+  let i = 0;
+
+  slides.forEach((_, idx) => {
+    const pip = document.createElement('div');
+    pip.className = 'pip' + (idx === 0 ? ' active' : '');
+    pip.addEventListener('click', () => go(idx));
+    pipsEl.appendChild(pip);
+  });
+  const pips = document.querySelectorAll('.pip');
+
+  function go(n) {
+    if (n < 0 || n >= slides.length) return;
+    // Leaving a staged demo slide: reload its dashboard NOW, in the background
+    // (hidden), so the next visit finds a fresh, fully loaded copy waiting.
+    if (slides[i].dataset.demoMax) reloadDashboard(slides[i]);
+    slides[i].classList.remove('active');
+    pips[i].classList.remove('active');
+    i = n;
+    slides[i].classList.add('active');
+    pips[i].classList.add('active');
+    counter.textContent = (i + 1) + ' / ' + slides.length;
+    syncArrows();
+    if (slides[i].classList.contains('dashboard-slide')) {
+      fitDashboard();
+      // Jumping (or re-)landing on a staged demo slide resets its click-forward
+      // progress and reloads the embedded dashboard, so the scripted sequence
+      // always replays from the default (unfiltered) state — same "starts fresh
+      // on a jump" rule as the reveal-slide / multi-reveal patterns below.
+      if (slides[i].dataset.demoMax) slides[i].dataset.demoStage = '0';
+    }
+    // Every slide arrived at via a jump (not the in-place reveal step below)
+    // starts fresh, so the "Best Practices" stamp replays each time.
+    if (slides[i].classList.contains('reveal-slide')) slides[i].classList.remove('revealed');
+    // Same for a multi-stage slide (the jigsaw table): reset to stage 0 and
+    // hide every staged element so the checks replay top to bottom again.
+    if (slides[i].classList.contains('multi-reveal')) {
+      slides[i].dataset.stage = '0';
+      slides[i].querySelectorAll('[data-stage]').forEach((el) => el.classList.remove('show'));
+      resetDuel(slides[i]);
+    }
+  }
+
+  /* "Next" (click / → / space) plays a slide's staged reveal(s) in place first,
+     then on the following press(es) moves to the next slide like normal. */
+  /* "Back" (← / ↑ / PageUp / wheel up / prev arrow) undoes a slide's internal steps
+     one at a time, and only leaves for the previous slide once the slide is back at
+     its first state. Staged reveals are rebuilt instantly up to the target stage;
+     the embedded dashboards are reloaded and fast-forwarded to the target step. */
+  let demoBusy = false;
+  function showStages(cur, upTo) {
+    resetDuel(cur);
+    cur.querySelectorAll('[data-stage]').forEach((el) => el.classList.remove('show'));
+    cur.classList.add('instant');
+    cur.dataset.stage = String(upTo);
+    for (let k = 1; k <= upTo; k++) {
+      cur.querySelectorAll('[data-stage="' + k + '"]').forEach((el) => { forceReflow(el); el.classList.add('show'); });
+      cur.querySelectorAll('[data-win-stage="' + k + '"]').forEach((el) => placeChip(cur, el));
+    }
+    cur.querySelectorAll('.chip.flying').forEach((el) => { el.classList.remove('flying'); el.style.transform = ''; });
+    requestAnimationFrame(() => requestAnimationFrame(() => cur.classList.remove('instant')));
+  }
+  /* Step back without a visible reload: build a fresh copy of the dashboard hidden
+     behind the live one, fast-forward it to the target step, then swap it in. */
+  function rebuildDashboard(cur, target) {
+    const old = cur.querySelector('.dash-iframe');
+    const nf = old.cloneNode(false);
+    nf.style.cssText = old.style.cssText;
+    nf.style.visibility = 'hidden';
+    demoBusy = true;
+    let swapped = false;
+    const swap = () => {
+      if (swapped) return;
+      swapped = true;
+      nf.style.visibility = '';
+      old.remove();
+      demoBusy = false;
+    };
+    nf.addEventListener('load', () => {
+      if (target === 0) { swap(); return; }
+      const onReady = (e) => { if (e.data && e.data.type === 'dash-demo-ready') { window.removeEventListener('message', onReady); swap(); } };
+      window.addEventListener('message', onReady);
+      setTimeout(() => { window.removeEventListener('message', onReady); swap(); }, 8000);
+      nf.contentWindow.postMessage({ type: 'dash-demo-goto', step: target }, '*');
+    }, { once: true });
+    old.after(nf);
+    loadDashboardInto(nf);
+  }
+  function retreat() {
+    const cur = slides[i];
+    if (cur.dataset.demoMax) {
+      const stage = parseInt(cur.dataset.demoStage || '0', 10);
+      if (stage > 0) {
+        if (demoBusy) return;
+        const target = stage - 1;
+        cur.dataset.demoStage = String(target);
+        rebuildDashboard(cur, target);
+        return;
+      }
+    }
+    if (cur.classList.contains('multi-reveal')) {
+      const stage = parseInt(cur.dataset.stage || '0', 10);
+      if (stage > 0) { showStages(cur, stage - 1); return; }
+    }
+    if (cur.classList.contains('reveal-slide') && cur.classList.contains('revealed')) {
+      cur.classList.remove('revealed');
+      return;
+    }
+    go(i - 1);
+  }
+
+  function advance() {
+    const cur = slides[i];
+    if (cur.dataset.demoMax && demoBusy) return;
+    if (cur.classList.contains('reveal-slide') && !cur.classList.contains('revealed')) {
+      cur.classList.add('revealed');
+      return;
+    }
+    if (cur.classList.contains('multi-reveal')) {
+      const stage = parseInt(cur.dataset.stage || '0', 10);
+      const max = parseInt(cur.dataset.maxStage || '0', 10);
+      if (stage < max) {
+        const nextStage = stage + 1;
+        cur.dataset.stage = String(nextStage);
+        cur.querySelectorAll('[data-stage="' + nextStage + '"]').forEach((el) => { forceReflow(el); el.classList.add('show'); });
+        cur.querySelectorAll('[data-win-stage="' + nextStage + '"]').forEach((el) => placeChip(cur, el));
+        if (nextStage === 11) {
+          const erased = eraseLetters(cur, 2500, 25);
+          typeFitTitle(cur, 2500 + erased + 100);
+        }
+        return;
+      }
+    }
+    if (cur.dataset.demoMax) {
+      const stage = parseInt(cur.dataset.demoStage || '0', 10);
+      const max = parseInt(cur.dataset.demoMax, 10);
+      if (stage < max) {
+        const nextStage = stage + 1;
+        cur.dataset.demoStage = String(nextStage);
+        const iframe = cur.querySelector('.dash-iframe');
+        if (iframe && iframe.contentWindow) {
+          iframe.contentWindow.postMessage({ type: 'dash-demo-step', step: nextStage }, '*');
+          // the step may focus something inside the iframe (a dropdown's search box);
+          // take keyboard focus back so the clicker's next key reaches the deck
+          iframe.blur(); document.body.setAttribute('tabindex', '-1'); document.body.focus({ preventScroll: true }); window.focus();
+        }
+        return;
+      }
+    }
+    go(i + 1);
+  }
+
+  /* Duel slide helpers (slide 11). placeChip() moves a feature chip from the
+     center into the winner's stack with a FLIP animation: measure where it is,
+     move it in the DOM, measure where it landed, then animate the difference. */
+  function flip(el, first) {
+    const last = el.getBoundingClientRect();
+    const dx = first.left - last.left, dy = first.top - last.top;
+    if (!dx && !dy) return;
+    el.style.transition = 'none';
+    el.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+    el.getBoundingClientRect(); // force layout
+    el.classList.add('flying');
+    el.style.transition = '';
+    el.style.transform = '';
+    el.addEventListener('transitionend', () => el.classList.remove('flying'), { once: true });
+  }
+  /* The tile(s) already sitting under the portrait are FLIPped too, so the newcomer
+     visibly pushes them outward (left under the Dashboard, right under the Agent). */
+  function placeChip(slide, chip) {
+    const target = slide.querySelector('.duel-wins[data-side="' + chip.dataset.winner + '"]');
+    if (!target || chip.parentElement === target) return;
+    const first = chip.getBoundingClientRect();
+    const siblings = Array.from(target.children).map((el) => [el, el.getBoundingClientRect()]);
+    target.appendChild(chip);
+    chip.classList.add('landed');
+    flip(chip, first);
+    siblings.forEach(([el, r]) => flip(el, r));
+  }
+  /* "They fit!" types in letter by letter (like the demo's question), starting
+     delayMs after the click so it lands as the final image fades in. */
+  let fitTimer = null;
+  function fitChars(slide) {
+    const t = slide.querySelector('.fit-title');
+    if (!t) return [];
+    if (!t.dataset.split) {
+      const walk = (node) => Array.from(node.childNodes).forEach((n) => {
+        if (n.nodeType === 3) {
+          const f = document.createDocumentFragment();
+          Array.from(n.textContent).forEach((c) => { const sp = document.createElement('span'); sp.className = 'ch'; sp.textContent = c; f.appendChild(sp); });
+          n.replaceWith(f);
+        } else walk(n);
+      });
+      walk(t);
+      t.dataset.split = '1';
+    }
+    return Array.from(t.querySelectorAll('.ch'));
+  }
+  /* Wipes the "They're not competing." line one letter at a time, last to first.
+     Returns the total time (ms) the wipe takes so the caller can chain the typing. */
+  let eraseTimer = null;
+  function preChars(slide) {
+    const t = slide.querySelector('.pre-title');
+    if (!t) return [];
+    if (!t.dataset.split) {
+      const walk = (node) => Array.from(node.childNodes).forEach((n) => {
+        if (n.nodeType === 3) {
+          const f = document.createDocumentFragment();
+          Array.from(n.textContent).forEach((c) => { const sp = document.createElement('span'); sp.className = 'pch'; sp.textContent = c; f.appendChild(sp); });
+          n.replaceWith(f);
+        } else walk(n);
+      });
+      walk(t);
+      t.dataset.split = '1';
+    }
+    return Array.from(t.querySelectorAll('.pch'));
+  }
+  function eraseLetters(slide, delayMs, stepMs) {
+    clearTimeout(eraseTimer);
+    const chars = preChars(slide);
+    let n = chars.length;
+    const tick = () => { if (n > 0) { chars[--n].classList.add('off'); eraseTimer = setTimeout(tick, stepMs); } };
+    eraseTimer = setTimeout(tick, delayMs);
+    return chars.length * stepMs;
+  }
+  function typeFitTitle(slide, delayMs) {
+    clearTimeout(fitTimer);
+    const chars = fitChars(slide);
+    let n = 0;
+    const tick = () => { if (n < chars.length) { chars[n++].classList.add('on'); fitTimer = setTimeout(tick, 45); } };
+    fitTimer = setTimeout(tick, delayMs);
+  }
+  function resetDuel(slide) {
+    clearTimeout(fitTimer);
+    clearTimeout(eraseTimer);
+    preChars(slide).forEach((c) => c.classList.remove('off'));
+    fitChars(slide).forEach((c) => c.classList.remove('on'));
+    const center = slide.querySelector('.duel-center');
+    if (!center) return;
+    const chips = Array.from(slide.querySelectorAll('.chip'))
+      .sort((x, y) => parseInt(x.dataset.stage, 10) - parseInt(y.dataset.stage, 10));
+    chips.forEach((c) => { c.classList.remove('flying', 'landed'); c.style.transform = ''; c.style.transition = ''; center.appendChild(c); });
+  }
+  /* Some rendering engines cache a stale transform/style value across a CSS
+     transition triggered by a class toggle, and won't recompute it until
+     something forces a hard reflow — an inline display:none/display:grid (or
+     whatever the element's own display already is) round-trip, never actually
+     painted, so no visible flicker. Used on every staged [data-stage] reveal
+     (chips, "They fit.") so the reveal's real end position/size always
+     applies, not a stale pre-transition value. */
+  function forceReflow(el) {
+    const prev = el.style.display;
+    el.style.display = 'none';
+    void el.offsetHeight;
+    el.style.display = prev;
+    void el.offsetHeight; // flush the restored state so the class change that follows transitions from it, not from display:none
+  }
+
+  /* Scale the embedded dashboard (fixed 1800x930 intrinsic size) as one unit to
+     fit whatever box the slide turns out to have — see the CSS comment above
+     .dash-frame for why this is a scale, not a responsive reflow or a scroll.
+     Looked up by class, not id: there are now two dashboard-slide instances
+     (slide 5's plain dashboard.html and slide 13's dashboard-agent.html with the
+     embedded Sidekick rail), so this always fits whichever one is currently active. */
+  /* Dashboards are prefetched: both iframes load at deck start (no loading="lazy")
+     and are reloaded when you LEAVE their slide, so landing on one never waits on a
+     load and the scripted sequence still always replays from the default state. */
+  function loadDashboardInto(iframe) {
+    iframe.src = iframe.getAttribute('src').split('?')[0] + '?t=' + Date.now();
+  }
+  function reloadDashboard(slide) {
+    const iframe = slide.querySelector('.dash-iframe');
+    if (iframe) loadDashboardInto(iframe);
+  }
+  function fitDashboard() {
+    const slide = slides[i];
+    if (!slide || !slide.classList.contains('dashboard-slide')) return;
+    const frame = slide.querySelector('.dash-frame');
+    const iframe = slide.querySelector('.dash-iframe');
+    if (!frame || !iframe) return;
+    const iw = 1800, ih = 930;
+    const cw = frame.clientWidth, ch = frame.clientHeight;
+    if (!cw || !ch) return;
+    const scale = Math.min(cw / iw, ch / ih);
+    const left = (cw - iw * scale) / 2, top = (ch - ih * scale) / 2;
+    iframe.style.left = left + 'px';
+    iframe.style.top = top + 'px';
+    iframe.style.transform = 'scale(' + scale + ')';
+  }
+  window.addEventListener('resize', () => {
+    if (slides[i].classList.contains('dashboard-slide')) fitDashboard();
+  });
+
+  /* One key handler for the deck. USB clickers send PageDown/PageUp (some send
+     arrows). When a dashboard iframe has focus the keys land INSIDE it, not here, so
+     each dashboard forwards them up as {type:'deck-key'} messages (see the
+     dashboards' own forwarder) and they run through this same function. */
+  function handleDeckKey(key) {
+    if (key === 'ArrowRight' || key === 'ArrowDown' || key === ' ' || key === 'PageDown') { advance(); return true; }
+    if (key === 'ArrowLeft' || key === 'ArrowUp' || key === 'PageUp') { retreat(); return true; }
+    if (key === 'Home') { go(0); return true; }
+    if (key === 'End') { go(slides.length - 1); return true; }
+    return false;
+  }
+  /* Clicker diagnostic: open the deck as presentation.html?keys to see, in the
+     corner, the last key the deck received and where it came from. */
+  const keyDebug = /[?&]keys/.test(location.search) ? (() => {
+    const el = document.createElement('div');
+    el.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:99;background:#222;color:#e5ff00;font:13px monospace;padding:6px 10px;border-radius:6px;opacity:.9';
+    el.textContent = 'keys: waiting for a key...';
+    document.body.appendChild(el);
+    return (txt) => { el.textContent = 'keys: ' + txt; };
+  })() : null;
+  document.addEventListener('keydown', (e) => {
+    const used = handleDeckKey(e.key);
+    if (keyDebug) keyDebug('deck got "' + (e.key === ' ' ? 'Space' : e.key) + '" (' + (used ? 'used' : 'ignored') + ')');
+    if (used) e.preventDefault();
+  });
+  window.addEventListener('message', (e) => {
+    const data = e.data;
+    if (data && data.type === 'deck-key' && typeof data.key === 'string') {
+      const used = handleDeckKey(data.key);
+      if (keyDebug) keyDebug('dashboard forwarded "' + (data.key === ' ' ? 'Space' : data.key) + '" (' + (used ? 'used' : 'ignored') + ')');
+    }
+  });
+  // keep keyboard focus on the deck itself, so a clicker works after clicking a dashboard
+  window.addEventListener('focus', () => { try { document.activeElement && document.activeElement.blur && document.activeElement.blur(); } catch (_) {} });
+
+  /* Mouse-wheel / trackpad navigation: one scroll gesture = one step. A single
+     physical scroll (especially trackpad momentum) fires many 'wheel' events in
+     quick succession, so a lock debounces it down to exactly one advance()/go()
+     per gesture instead of flying through several slides. Small deltas (sub-pixel
+     trackpad jitter) are ignored outright. */
+  let wheelLocked = false;
+  document.addEventListener('wheel', (e) => {
+    if (wheelLocked || Math.abs(e.deltaY) < 10) return;
+    wheelLocked = true;
+    if (e.deltaY > 0) advance(); else retreat();
+    setTimeout(() => { wheelLocked = false; }, 700);
+  }, { passive: true });
+  const prevBtn = document.getElementById('prev');
+  const nextBtn = document.getElementById('next');
+  prevBtn.addEventListener('click', () => retreat());
+  nextBtn.addEventListener('click', () => advance());
+  function syncArrows() {
+    prevBtn.classList.toggle('disabled', i === 0);
+    nextBtn.classList.toggle('disabled', i === slides.length - 1);
+  }
+  syncArrows();
+  counter.textContent = (i + 1) + ' / ' + slides.length;
+  if (slides[i].classList.contains('dashboard-slide')) fitDashboard();
+</script>
+</body>
+</html>

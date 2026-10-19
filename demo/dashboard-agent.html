@@ -348,7 +348,7 @@
         <button data-q="Which state leads on sales, and how far ahead is it?">Leading state</button>
       </div>
       <div class="rail-prompt-wrap">
-        <textarea class="rail-prompt" id="rail-prompt" placeholder="In September there is a big increase in Sales and Order while Profit increase only a bit. what are the reasons for that?" spellcheck="false"></textarea>
+        <textarea class="rail-prompt" id="rail-prompt" placeholder="What drove Sales and Orders up while Profit lagged?" spellcheck="false"></textarea>
         <div class="rail-prompt-actions">
           <span class="rail-hint">Ctrl+Enter</span>
           <button class="rail-reset" id="rail-reset" title="Reset the prompt to just the current context">Reset</button>
@@ -846,7 +846,8 @@ function setKpi(key, val, isCount) {
   el.className = 'metric-value' + (val < 0 ? ' negative' : '');
 }
 let granularity = 'day'; // 'day' | 'week' | 'month' | 'quarter' | 'year'
-const METRIC_COLOR = { sales: '#5B8DF8', profit: '#e5ff00', orders: '#2DD4BF' };
+const METRIC_COLOR = { sales: '#5B8DF8', profit: '#B44EF5', orders: '#F07840' }; // WSC palette: blue / purple / orange
+const METRIC_RGB = { sales: '91,141,248', profit: '180,78,245', orders: '240,120,64' };
 
 function renderOvertime(rows) {
   const s = overtimeSeries(rows, granularity);
@@ -887,7 +888,7 @@ function renderOvertime(rows) {
 function renderChartCard(cardId, canvasId, horizontal, rows) {
   const data = buildCardData(cardId, rows);
   if (charts[cardId]) charts[cardId].destroy();
-  const colors = data.map(d => (metric === 'profit' && d.val < 0) ? 'rgba(255,49,49,0.65)' : 'rgba(91,141,248,0.65)');
+  const colors = data.map(d => (metric === 'profit' && d.val < 0) ? 'rgba(255,49,49,0.65)' : `rgba(${METRIC_RGB[metric]},0.65)`);
   charts[cardId] = new Chart(document.getElementById(canvasId), {
     type: 'bar',
     data: { labels: data.map(d => d.label), datasets: [{ data: data.map(d => d.val), backgroundColor: colors, borderRadius: 4, maxBarThickness: horizontal ? 20 : 60 }] },
@@ -940,7 +941,7 @@ function renderMap(rows) {
           const v = ctx.dataset.data[ctx.dataIndex] && ctx.dataset.data[ctx.dataIndex].value;
           if (v === null || v === undefined) return 'rgba(64,64,64,0.35)';
           const intensity = 0.18 + 0.72 * (Math.abs(v) / maxAbs);
-          return (isProfit && v < 0) ? `rgba(255,49,49,${intensity.toFixed(2)})` : `rgba(91,141,248,${intensity.toFixed(2)})`;
+          return (isProfit && v < 0) ? `rgba(255,49,49,${intensity.toFixed(2)})` : `rgba(${METRIC_RGB[metric]},${intensity.toFixed(2)})`;
         },
         borderColor: '#404040', borderWidth: 0.5,
         data: points,
@@ -1038,7 +1039,7 @@ const AGENT_ENDPOINT = null;
 const SIDEKICK_ICON = '<svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M12 2l2.2 6.8L21 11l-6.8 2.2L12 20l-2.2-6.8L3 11l6.8-2.2L12 2z" fill="currentColor"/></svg>';
 // Pre-seeded for the demo: the question is already sitting in the box on load, so the
 // only action needed on stage is clicking Ask — nothing to type live.
-const DEFAULT_QUESTION = 'In September there is a big increase in Sales and Order while Profit increase only a bit. what are the reasons for that?';
+const DEFAULT_QUESTION = 'What drove Sales and Orders up while Profit lagged?';
 const CONTEXT_HEAD = 'Context (current dashboard view):';
 const QUESTION_HEAD = 'Question:';
 const FILTER_LABEL = { state: 'State', segment: 'Segment', manufacturer: 'Manufacturer', category: 'Category', subcat: 'Sub-Category', customer: 'Customer' };
@@ -1285,12 +1286,9 @@ ${subList}
 function septemberProfitLagAnswer() {
   return `<p><b>Why profit lagged:</b></p>
 <ol>
-<li>Furniture drove the growth, at near-zero margin. Furniture sales jumped from <span class="num">$2.3K</span> to <span class="num">$8.7K</span> but earned only <span class="num">$582</span> (6.7% margin). Tables made <span class="num">$3.3K</span> in sales for <span class="num">$1.50</span> profit. Chairs made <span class="num">$3.9K</span> for <span class="num">$279</span>.</li>
-<li>Discounting spiked. Discounted lines carried 73% of September sales (<span class="num">$13.8K</span>) versus 43% in August. Nearly all Furniture sold at 20% off, and 4 of those lines lost money (worst: a <span class="num">$1,322</span> conference table at <span class="neg">-$99</span>).</li>
-<li>The high-margin mix shrank. Office Supplies, at 35% margin, fell from <span class="num">$9.1K</span> to <span class="num">$7.3K</span>. Appliances alone dropped from <span class="num">$5.1K</span> to <span class="num">$0.8K</span>.</li>
-<li>Shipping mix hurt. Second Class sales grew to <span class="num">$4.9K</span> at only 8.5% margin, versus 24.5% on Standard Class.</li>
-</ol>
-<p>In short: September added about <span class="num">$4.3K</span> of mostly discounted Furniture sales, which contributed almost no profit, while the profitable Office Supplies business declined.</p>`;
+<li>Furniture drove the growth at near-zero margin. Sales jumped from <span class="num">$2.3K</span> to <span class="num">$8.7K</span>, but profit was only <span class="num">$582</span> (6.7%).</li>
+<li>Discounting spiked. Discounted lines made 73% of sales, up from 43% in August.</li>
+</ol>`;
 }
 
 function mockAnswer(question, items) {
@@ -1299,6 +1297,9 @@ function mockAnswer(question, items) {
   const t = calcTotals(rows);
   const scope = scopeSentence(items);
   if (!rows.length) return `<p>There are no rows ${scope}. Widen the date range or clear a filter and ask again.</p>`;
+
+  // The scripted demo question carries no month name, so match it directly.
+  if (q.includes(DEFAULT_QUESTION.toLowerCase())) return septemberProfitLagAnswer();
 
   const monthIdx = MONTH_FULL.findIndex(mn => q.includes(mn.toLowerCase()));
   if (monthIdx !== -1 && /profit|margin/.test(q) && /sales|orders?/.test(q) && /reason|why/.test(q)) {
@@ -1471,23 +1472,72 @@ document.querySelector('.filter-apply-btn').click(); // commits the State select
 // renderAll() -> syncAgentContext() ran again inside the clicks above, so
 // _lastContextBlock already reflects the final (Jan 1 – Sep 30 + California) state —
 // seed the prompt box only now so it is not a run behind.
-promptEl.value = composePrompt(_lastContextBlock, DEFAULT_QUESTION);
+promptEl.value = composePrompt(_lastContextBlock, ''); // context only — the question is typed in by demo step 2
 
 /* ── scripted demo steps, driven by the parent deck's "forward" clicks ──────
-   Only two presenter actions left on stage for this slide: open the Sidekick
-   rail, then ask the pre-seeded question. Same postMessage mechanism as
+   Three presenter actions on stage for this slide: open the Sidekick rail, type
+   the question into the prompt (context is already there), then ask it. Same postMessage mechanism as
    demo/dashboard.html's Section 1 embed — the parent deck stages one action
    per click-forward since direct cross-frame DOM access doesn't survive the
    file:// origin boundary. ── */
 function demoStepOpenRail() { const el = document.getElementById('rail-toggle'); if (el) el.click(); }
-function demoStepClickAsk() { const el = document.getElementById('rail-send'); if (el) el.click(); }
+let _typeTimer = null;
+function finishTyping() {
+  if (_typeTimer) { clearInterval(_typeTimer); _typeTimer = null; }
+  promptEl.value = composePrompt(_lastContextBlock, DEFAULT_QUESTION);
+  promptEl.scrollTop = promptEl.scrollHeight;
+}
+// Types the question in after the context block, so the audience watches it appear.
+function demoStepTypeQuestion() {
+  if (_typeTimer) clearInterval(_typeTimer);
+  let n = 0;
+  _typeTimer = setInterval(() => {
+    n += 2;
+    if (n >= DEFAULT_QUESTION.length) { finishTyping(); return; }
+    promptEl.value = composePrompt(_lastContextBlock, DEFAULT_QUESTION.slice(0, n));
+    promptEl.scrollTop = promptEl.scrollHeight;
+  }, 22);
+}
+function demoStepClickAsk() { if (_typeTimer) finishTyping(); const el = document.getElementById('rail-send'); if (el) el.click(); }
 
-const DEMO_STEPS = [demoStepOpenRail, demoStepClickAsk];
+const DEMO_STEPS = [demoStepOpenRail, demoStepTypeQuestion, demoStepClickAsk];
+// A scripted step can leave keyboard focus INSIDE this page (opening a dropdown
+// focuses its search box; opening the rail focuses the prompt). A clicker's next
+// key would then land here instead of reaching the deck, so hand focus back after
+// every step (again after the rail's slide animation settles).
+function releaseFocus() { const a = document.activeElement; if (a && a !== document.body && a.blur) a.blur(); }
+function runDemoStep(n) { const step = DEMO_STEPS[n - 1]; if (step) step(); }
 window.addEventListener('message', (e) => {
   const data = e.data;
   if (!data || data.type !== 'dash-demo-step') return;
-  const step = DEMO_STEPS[data.step - 1];
-  if (step) step();
+  runDemoStep(data.step);
+  setTimeout(releaseFocus, 0); setTimeout(releaseFocus, 450);
+});
+
+/* Deck "back": the parent reloads this page, then asks it to fast-forward to step N
+   by replaying steps 1..N in order, and gets a ready message when it is done. */
+window.addEventListener('message', async (e) => {
+  const data = e.data;
+  if (!data || data.type !== 'dash-demo-goto') return;
+  for (let n = 1; n <= data.step; n++) {
+    runDemoStep(n);
+    await new Promise(r => setTimeout(r, 700));
+  }
+  releaseFocus();
+  window.parent.postMessage({ type: 'dash-demo-ready' }, '*');
+});
+
+/* Clicker support: when this page is embedded in the deck and has keyboard focus,
+   slide-navigation keys (what a USB clicker sends) would stop here. Forward them to
+   the deck, unless the user is typing in a field. */
+window.addEventListener('keydown', (e) => {
+  if (window.parent === window) return;
+  const t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+  if (['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', ' '].includes(e.key)) {
+    e.preventDefault();
+    window.parent.postMessage({ type: 'deck-key', key: e.key }, '*');
+  }
 });
 </script>
 </body>

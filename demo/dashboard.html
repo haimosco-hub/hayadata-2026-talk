@@ -48,6 +48,12 @@
   .kpi-row.cols-4 { grid-template-columns: repeat(4, 1fr); }
   .metric-card { min-width: 0; }
 
+  /* ── demo highlight on the Sales KPI (after the Sep filter step): glow ring ── */
+  .metric-card { transition: box-shadow .35s, border-color .35s; }
+  .metric-card.hl-on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent), 0 0 28px rgba(229,255,0,.45); animation: hlPulse 1.6s ease-in-out infinite; }
+  .metric-card.hl-on .metric-value { color: var(--accent); }
+  @keyframes hlPulse { 50% { box-shadow: 0 0 0 2px var(--accent), 0 0 44px rgba(229,255,0,.75); } }
+
   .gran-toggle { display: flex; gap: 2px; flex-shrink: 0; }
   .gran-toggle button {
     background: var(--nested); border: 1px solid var(--border); color: var(--text-secondary);
@@ -699,20 +705,70 @@ function setKpi(key, val, isCount) {
   el.className = 'metric-value' + (val < 0 ? ' negative' : '');
 }
 let granularity = 'day'; // 'day' | 'week' | 'month' | 'quarter' | 'year'
-const METRIC_COLOR = { sales: '#5B8DF8', profit: '#e5ff00', orders: '#2DD4BF' };
+const METRIC_COLOR = { sales: '#5B8DF8', profit: '#B44EF5', orders: '#F07840' }; // WSC palette: blue / purple / orange
+const METRIC_RGB = { sales: '91,141,248', profit: '180,78,245', orders: '240,120,64' };
+
+/* Demo: once the month breakdown step has run, the September dot stays emphasised
+   (bigger dot, white rim, soft halo) through every later re-render (Profit, Orders). */
+let sepDotOn = false;
+function sepIndex(labels) {
+  const year = EFFECTIVE_MAX_DATE.slice(0, 4);
+  let idx = labels.indexOf(`${year}-09`);
+  if (idx === -1) idx = labels.reduce((best, l, i) => (l.endsWith('-09') ? i : best), -1);
+  return idx;
+}
+const sepHaloPlugin = {
+  id: 'sepHalo',
+  afterDatasetsDraw(chart) {
+    if (!sepDotOn || granularity !== 'month') return;
+    const idx = sepIndex(chart.data.labels);
+    const pt = idx > -1 && chart.getDatasetMeta(0).data[idx];
+    if (!pt) return;
+    const c = chart.ctx;
+    c.save();
+    c.beginPath(); c.arc(pt.x, pt.y, 17, 0, Math.PI * 2);
+    c.fillStyle = 'rgba(255,255,255,0.14)'; c.fill();
+    c.lineWidth = 2; c.strokeStyle = 'rgba(255,255,255,0.7)'; c.stroke();
+    // Change vs Aug: bold Aug->Sep segment, faint ring on Aug, % pill at the midpoint
+    const prev = idx > 0 && chart.getDatasetMeta(0).data[idx - 1];
+    const vals = chart.data.datasets[0].data;
+    if (prev && vals[idx - 1]) {
+      const pct = (vals[idx] - vals[idx - 1]) / Math.abs(vals[idx - 1]) * 100;
+      const col = '#e5ff00';
+      c.beginPath(); c.arc(prev.x, prev.y, 9, 0, Math.PI * 2);
+      c.lineWidth = 2; c.strokeStyle = 'rgba(255,255,255,0.45)'; c.stroke();
+      c.beginPath(); c.moveTo(prev.x, prev.y);
+      c.bezierCurveTo(prev.cp2x, prev.cp2y, pt.cp1x, pt.cp1y, pt.x, pt.y);
+      c.lineWidth = 4; c.strokeStyle = col; c.lineCap = 'round'; c.stroke();
+      const txt = (pct >= 0 ? '+' : '−') + Math.abs(Math.round(pct)).toLocaleString('en-US') + '%';
+      c.font = '700 14px Inter, sans-serif';
+      const w = c.measureText(txt).width + 18, h = 26;
+      const mx = (prev.x + pt.x) / 2 - w / 2 - 22, my = (prev.y + pt.y) / 2 - h / 2;
+      c.beginPath(); c.roundRect(mx, my, w, h, 13);
+      c.fillStyle = col; c.fill();
+      c.fillStyle = '#0b0b0b'; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.fillText(txt, mx + w / 2, my + h / 2 + 1);
+    }
+    c.restore();
+  },
+};
 
 function renderOvertime(rows) {
   const s = overtimeSeries(rows, granularity);
   const dataArr = s[metric];
   const color = METRIC_COLOR[metric];
+  const hiIdx = (sepDotOn && granularity === 'month') ? sepIndex(s.labels) : -1;
+  const hi = (a, b) => dataArr.map((_, i) => (i === hiIdx ? a : b));
   if (charts['overtime']) charts['overtime'].destroy();
   charts['overtime'] = new Chart(document.getElementById('chart-overtime'), {
     type: 'line',
+    plugins: [sepHaloPlugin],
     data: {
       labels: s.labels,
       datasets: [{
         data: dataArr, borderColor: color, backgroundColor: 'transparent', borderWidth: 2,
-        pointRadius: 2.5, pointHoverRadius: 5, pointBackgroundColor: color, pointBorderColor: color, tension: 0.3,
+        pointRadius: hi(8, 2.5), pointHoverRadius: hi(9, 5), pointBackgroundColor: color,
+        pointBorderColor: hi('#ffffff', color), pointBorderWidth: hi(3, 1), tension: 0.3,
       }],
     },
     options: {
@@ -740,7 +796,7 @@ function renderOvertime(rows) {
 function renderChartCard(cardId, canvasId, horizontal, rows) {
   const data = buildCardData(cardId, rows);
   if (charts[cardId]) charts[cardId].destroy();
-  const colors = data.map(d => (metric === 'profit' && d.val < 0) ? 'rgba(255,49,49,0.65)' : 'rgba(91,141,248,0.65)');
+  const colors = data.map(d => (metric === 'profit' && d.val < 0) ? 'rgba(255,49,49,0.65)' : `rgba(${METRIC_RGB[metric]},0.65)`);
   charts[cardId] = new Chart(document.getElementById(canvasId), {
     type: 'bar',
     data: { labels: data.map(d => d.label), datasets: [{ data: data.map(d => d.val), backgroundColor: colors, borderRadius: 4, maxBarThickness: horizontal ? 20 : 60 }] },
@@ -793,7 +849,7 @@ function renderMap(rows) {
           const v = ctx.dataset.data[ctx.dataIndex] && ctx.dataset.data[ctx.dataIndex].value;
           if (v === null || v === undefined) return 'rgba(64,64,64,0.35)';
           const intensity = 0.18 + 0.72 * (Math.abs(v) / maxAbs);
-          return (isProfit && v < 0) ? `rgba(255,49,49,${intensity.toFixed(2)})` : `rgba(91,141,248,${intensity.toFixed(2)})`;
+          return (isProfit && v < 0) ? `rgba(255,49,49,${intensity.toFixed(2)})` : `rgba(${METRIC_RGB[metric]},${intensity.toFixed(2)})`;
         },
         borderColor: '#404040', borderWidth: 0.5,
         data: points,
@@ -922,7 +978,16 @@ function demoStepPickJanToSep() {
   const sep30 = document.querySelector(`#dp-grid .dp-day[data-date="${year}-09-30"]`); if (sep30) sep30.click();
 }
 function demoStepApplyDateRange() { const el = document.getElementById('dp-apply-btn'); if (el && !el.disabled) el.click(); }
-function demoStepPickMonthGranularity() { const el = document.querySelector('#gran-toggle button[data-gran="month"]'); if (el) el.click(); }
+function demoStepPickMonthGranularity() {
+  const el = document.querySelector('#gran-toggle button[data-gran="month"]'); if (el) el.click();
+  sepDotOn = true; renderOvertime(filteredRows()); // keep the Sep dot highlighted until the end
+}
+// Sales KPI highlight: on right after the Sep range is applied, off at the next step
+function setSalesHighlight(on) {
+  const card = document.getElementById('kpi-sales-value').closest('.metric-card');
+  card.classList.toggle('hl-on', on);
+}
+function demoStepApplySepRange() { demoStepApplyDateRange(); setSalesHighlight(true); }
 function demoStepOpenSeptemberTooltip() {
   const chart = charts['overtime'];
   if (!chart) return;
@@ -945,7 +1010,7 @@ const DEMO_STEPS = [
   demoStepSelectCalifornia,
   demoStepOpenDatePicker,
   demoStepPickSeptemberRange,
-  demoStepApplyDateRange,
+  demoStepApplySepRange,
   demoStepOpenDatePicker,
   demoStepPickJanToSep,
   demoStepApplyDateRange,
@@ -953,11 +1018,47 @@ const DEMO_STEPS = [
   demoStepPickProfit,
   demoStepPickOrders,
 ];
+// A scripted step can leave keyboard focus INSIDE this page (opening a dropdown
+// focuses its search box; opening the rail focuses the prompt). A clicker's next
+// key would then land here instead of reaching the deck, so hand focus back after
+// every step (again after the rail's slide animation settles).
+function releaseFocus() { const a = document.activeElement; if (a && a !== document.body && a.blur) a.blur(); }
+function runDemoStep(n) {
+  if (n !== 5) setSalesHighlight(false);
+  const step = DEMO_STEPS[n - 1];
+  if (step) step();
+}
 window.addEventListener('message', (e) => {
   const data = e.data;
   if (!data || data.type !== 'dash-demo-step') return;
-  const step = DEMO_STEPS[data.step - 1];
-  if (step) step();
+  runDemoStep(data.step);
+  setTimeout(releaseFocus, 0); setTimeout(releaseFocus, 450);
+});
+
+/* Deck "back": the parent reloads this page, then asks it to fast-forward to step N
+   by replaying steps 1..N in order, and gets a ready message when it is done. */
+window.addEventListener('message', async (e) => {
+  const data = e.data;
+  if (!data || data.type !== 'dash-demo-goto') return;
+  for (let n = 1; n <= data.step; n++) {
+    runDemoStep(n);
+    await new Promise(r => setTimeout(r, 80));
+  }
+  releaseFocus();
+  window.parent.postMessage({ type: 'dash-demo-ready' }, '*');
+});
+
+/* Clicker support: when this page is embedded in the deck and has keyboard focus,
+   slide-navigation keys (what a USB clicker sends) would stop here. Forward them to
+   the deck, unless the user is typing in a field. */
+window.addEventListener('keydown', (e) => {
+  if (window.parent === window) return;
+  const t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+  if (['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', ' '].includes(e.key)) {
+    e.preventDefault();
+    window.parent.postMessage({ type: 'deck-key', key: e.key }, '*');
+  }
 });
 </script>
 </body>
