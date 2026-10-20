@@ -878,7 +878,7 @@ function renderOvertime(rows) {
       },
       scales: {
         x: { ticks: { color: '#8e8e8e', font: { family: 'Inter', size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 10 }, grid: { display: false } },
-        y: { ticks: { color: '#8e8e8e', font: { family: 'Inter', size: 10 }, callback: (v) => fmtCompact(v, metric === 'orders') }, grid: { color: '#282828' } },
+        y: { beginAtZero: true, ticks: { color: '#8e8e8e', font: { family: 'Inter', size: 10 }, callback: (v) => fmtCompact(v, metric === 'orders') }, grid: { color: '#282828' } },
       },
     },
   });
